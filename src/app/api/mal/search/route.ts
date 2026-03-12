@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const fields = "id,title,main_picture,synopsis,media_type,num_chapters,num_volumes,mean,status";
-    const url = `https://api.myanimelist.net/v2/manga?q=${encodeURIComponent(query)}&limit=10&fields=${fields}`;
+    const url = `https://api.myanimelist.net/v2/manga?q=${encodeURIComponent(query)}&limit=25&fields=${fields}`;
 
     const response = await fetch(url, {
       headers: {
