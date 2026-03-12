@@ -1,6 +1,7 @@
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ProfileForm } from "@/components/profile-form";
+import { ExportButton } from "@/components/export-button";
 
 export default async function ProfilePage() {
   const user = await getCurrentUser();
@@ -44,6 +45,15 @@ export default async function ProfilePage() {
             />
           ))}
         </div>
+      </div>
+
+      {/* Data export */}
+      <div className="rounded-xl border border-card-border bg-card p-4">
+        <h2 className="mb-2 text-sm font-semibold">Data</h2>
+        <p className="mb-3 text-xs text-muted">
+          Export all app data (users, series, progress) as a JSON file for backup or migration.
+        </p>
+        <ExportButton />
       </div>
     </div>
   );

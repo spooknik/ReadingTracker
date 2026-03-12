@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { SeriesCard } from "@/components/series-card";
+import { LibraryList } from "@/components/library-list";
 
 export default async function DashboardPage() {
   const currentUser = await getCurrentUser();
@@ -49,16 +49,11 @@ export default async function DashboardPage() {
           </a>
         </div>
       ) : (
-        <div className="space-y-3">
-          {allSeries.map((series) => (
-            <SeriesCard
-              key={series.id}
-              series={series}
-              allUsers={allUsers}
-              currentUserId={currentUser.id}
-            />
-          ))}
-        </div>
+        <LibraryList
+          allSeries={JSON.parse(JSON.stringify(allSeries))}
+          allUsers={JSON.parse(JSON.stringify(allUsers))}
+          currentUserId={currentUser.id}
+        />
       )}
     </div>
   );
