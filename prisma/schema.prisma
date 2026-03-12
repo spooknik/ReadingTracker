@@ -1,0 +1,73 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum MediaType {
+  MANGA
+  MANHWA
+  MANHUA
+  LIGHT_NOVEL
+  BOOK
+}
+
+enum ReadingStatus {
+  READING
+  COMPLETED
+  ON_HOLD
+  DROPPED
+  PLAN_TO_READ
+}
+
+model User {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  displayName String   @map("display_name")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  createdSeries Series[]     @relation("CreatedBy")
+  userSeries    UserSeries[]
+
+  @@map("users")
+}
+
+model Series {
+  id            String    @id @default(uuid())
+  malId         Int?      @unique @map("mal_id")
+  title         String
+  imageUrl      String?   @map("image_url")
+  synopsis      String?
+  mediaType     MediaType @default(MANGA) @map("media_type")
+  totalChapters Int?      @map("total_chapters")
+  totalVolumes  Int?      @map("total_volumes")
+  link          String?
+  createdById   String    @map("created_by_id")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  createdBy  User         @relation("CreatedBy", fields: [createdById], references: [id])
+  userSeries UserSeries[]
+
+  @@map("series")
+}
+
+model UserSeries {
+  id             String        @id @default(uuid())
+  userId         String        @map("user_id")
+  seriesId       String        @map("series_id")
+  status         ReadingStatus @default(PLAN_TO_READ)
+  currentChapter Int           @default(0) @map("current_chapter")
+  rating         Int?
+  notes          String?
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+  joinedAt       DateTime      @default(now()) @map("joined_at")
+
+  user   User   @relation(fields: [userId], references: [id])
+  series Series @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, seriesId])
+  @@map("user_series")
+}
