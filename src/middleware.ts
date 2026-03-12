@@ -1,26 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
 
 /**
- * Middleware that reads Cloudflare Zero Trust headers.
+ * Middleware that identifies the current user.
  *
- * In production, Cloudflare Access sets:
- *   - Cf-Access-Authenticated-User-Email
+ * Resolution order:
+ *   1. Cloudflare Zero Trust header (Cf-Access-Authenticated-User-Email)
+ *   2. DEFAULT_USER_EMAIL env var (for LAN / self-hosted without Cloudflare)
+ *   3. DEV_USER_EMAIL or "dev@localhost" (development only)
  *
- * In development, we fall back to a configurable dev email
- * via the `X-Dev-User-Email` header or an env variable.
+ * Set DEFAULT_USER_EMAIL in production to allow access without Cloudflare.
+ * Once Cloudflare Access is configured, the header takes priority automatically.
  */
 export function middleware(request: NextRequest) {
   const cfEmail = request.headers.get("cf-access-authenticated-user-email");
+  const defaultEmail = process.env.DEFAULT_USER_EMAIL;
   const devEmail =
     request.headers.get("x-dev-user-email") ||
     process.env.DEV_USER_EMAIL ||
     "dev@localhost";
 
-  const email = cfEmail || (process.env.NODE_ENV === "development" ? devEmail : null);
+  const email =
+    cfEmail ||
+    defaultEmail ||
+    (process.env.NODE_ENV === "development" ? devEmail : null);
 
   if (!email) {
     return NextResponse.json(
-      { error: "Unauthorized — no Cloudflare Access identity found" },
+      { error: "Unauthorized — no Cloudflare Access identity found. Set DEFAULT_USER_EMAIL env var for LAN access." },
       { status: 401 }
     );
   }
