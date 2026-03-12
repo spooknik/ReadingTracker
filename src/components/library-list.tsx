@@ -9,12 +9,13 @@ type SeriesWithRelations = Series & {
   createdBy: User;
 };
 
-type SortOption = "recent" | "title" | "title-desc" | "chapters" | "rating";
+type SortOption = "recent" | "title" | "title-desc" | "chapters" | "rating" | "status";
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: "recent", label: "Recently Added" },
   { value: "title", label: "Title A-Z" },
   { value: "title-desc", label: "Title Z-A" },
+  { value: "status", label: "My Status" },
   { value: "chapters", label: "Most Chapters" },
   { value: "rating", label: "Highest Rated" },
 ];
@@ -64,6 +65,24 @@ export function LibraryList({ allSeries, allUsers, currentUserId }: LibraryListP
           const aAvg = a.userSeries.reduce((sum, us) => sum + (us.rating ?? 0), 0) / (a.userSeries.length || 1);
           const bAvg = b.userSeries.reduce((sum, us) => sum + (us.rating ?? 0), 0) / (b.userSeries.length || 1);
           return bAvg - aAvg;
+        });
+        break;
+      }
+      case "status": {
+        const statusOrder: Record<string, number> = {
+          READING: 0,
+          PLAN_TO_READ: 1,
+          ON_HOLD: 2,
+          COMPLETED: 3,
+          DROPPED: 4,
+        };
+        sorted.sort((a, b) => {
+          const aStatus = a.userSeries.find((us) => us.userId === currentUserId)?.status;
+          const bStatus = b.userSeries.find((us) => us.userId === currentUserId)?.status;
+          const aOrder = aStatus ? (statusOrder[aStatus] ?? 99) : 99;
+          const bOrder = bStatus ? (statusOrder[bStatus] ?? 99) : 99;
+          if (aOrder !== bOrder) return aOrder - bOrder;
+          return a.title.localeCompare(b.title);
         });
         break;
       }

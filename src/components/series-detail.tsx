@@ -285,6 +285,8 @@ function UserProgressCard({
   const [status, setStatus] = useState(userSeries.status);
   const [rating, setRating] = useState(userSeries.rating ?? 0);
   const [saving, setSaving] = useState(false);
+  const [confirmUntrack, setConfirmUntrack] = useState(false);
+  const [untracking, setUntracking] = useState(false);
 
   async function handleSave() {
     setSaving(true);
@@ -320,6 +322,23 @@ function UserProgressCard({
       router.refresh();
     } catch {
       // Silently fail
+    }
+  }
+
+  async function handleUntrack() {
+    setUntracking(true);
+    try {
+      const res = await fetch(`/api/series/${seriesId}?action=untrack`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        router.refresh();
+      }
+    } catch {
+      // Silently fail — user can retry
+    } finally {
+      setUntracking(false);
+      setConfirmUntrack(false);
     }
   }
 
@@ -436,6 +455,7 @@ function UserProgressCard({
             <button
               onClick={() => {
                 setEditing(false);
+                setConfirmUntrack(false);
                 setChapter(userSeries.currentChapter);
                 setStatus(userSeries.status);
                 setRating(userSeries.rating ?? 0);
@@ -445,6 +465,37 @@ function UserProgressCard({
               Cancel
             </button>
           </div>
+
+          {/* Stop tracking with two-step confirmation */}
+          {!confirmUntrack ? (
+            <button
+              onClick={() => setConfirmUntrack(true)}
+              className="w-full rounded-lg border border-red-300 py-2 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+            >
+              Stop Tracking
+            </button>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-center text-xs text-red-600 dark:text-red-400">
+                Remove your progress for this series?
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleUntrack}
+                  disabled={untracking}
+                  className="flex-1 rounded-lg bg-red-600 py-2 text-xs font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+                >
+                  {untracking ? "Removing..." : "Yes, stop tracking"}
+                </button>
+                <button
+                  onClick={() => setConfirmUntrack(false)}
+                  className="flex-1 rounded-lg border border-card-border py-2 text-xs font-medium transition-colors hover:bg-slate-50 dark:hover:bg-slate-800"
+                >
+                  Keep
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

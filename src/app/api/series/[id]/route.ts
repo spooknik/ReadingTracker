@@ -94,33 +94,50 @@ export async function PATCH(
   }
 }
 
-// Delete a series (only the creator can delete, removes all user_series too via cascade)
+// DELETE /api/series/[id]?action=untrack  — remove your tracking only
+// DELETE /api/series/[id]                 — delete the entire series for everyone
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
   const user = await getCurrentUser();
+  const action = request.nextUrl.searchParams.get("action");
 
   try {
+    if (action === "untrack") {
+      // Remove only the current user's tracking entry
+      const userSeries = await prisma.userSeries.findUnique({
+        where: {
+          userId_seriesId: { userId: user.id, seriesId: id },
+        },
+      });
+
+      if (!userSeries) {
+        return NextResponse.json(
+          { error: "You are not tracking this series" },
+          { status: 404 }
+        );
+      }
+
+      await prisma.userSeries.delete({ where: { id: userSeries.id } });
+
+      return NextResponse.json({ success: true });
+    }
+
+    // Default: delete the entire series
     const series = await prisma.series.findUnique({ where: { id } });
     if (!series) {
       return NextResponse.json({ error: "Series not found" }, { status: 404 });
-    }
-
-    if (series.createdById !== user.id) {
-      // Allow any user to delete — small trusted group
-      // If you want creator-only delete, uncomment:
-      // return NextResponse.json({ error: "Only the creator can delete this series" }, { status: 403 });
     }
 
     await prisma.series.delete({ where: { id } });
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Error deleting series:", error);
+    console.error("Error deleting:", error);
     return NextResponse.json(
-      { error: "Failed to delete series" },
+      { error: "Failed to delete" },
       { status: 500 }
     );
   }
