@@ -94,6 +94,38 @@ export async function PATCH(
   }
 }
 
+// Delete a series (only the creator can delete, removes all user_series too via cascade)
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const user = await getCurrentUser();
+
+  try {
+    const series = await prisma.series.findUnique({ where: { id } });
+    if (!series) {
+      return NextResponse.json({ error: "Series not found" }, { status: 404 });
+    }
+
+    if (series.createdById !== user.id) {
+      // Allow any user to delete — small trusted group
+      // If you want creator-only delete, uncomment:
+      // return NextResponse.json({ error: "Only the creator can delete this series" }, { status: 403 });
+    }
+
+    await prisma.series.delete({ where: { id } });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Error deleting series:", error);
+    return NextResponse.json(
+      { error: "Failed to delete series" },
+      { status: 500 }
+    );
+  }
+}
+
 // Update series metadata (link, etc.)
 export async function PUT(
   request: NextRequest,

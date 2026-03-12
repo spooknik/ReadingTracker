@@ -19,7 +19,19 @@ function mapMediaType(malType?: string): MediaType {
   }
 }
 
-// Add a series from MAL search result
+/**
+ * Extract MAL ID from a MAL URL if provided.
+ * Supports formats like:
+ *   https://myanimelist.net/manga/188486
+ *   https://myanimelist.net/manga/188486/Title_Name
+ */
+function extractMalId(malLink?: string | null): number | null {
+  if (!malLink) return null;
+  const match = malLink.match(/myanimelist\.net\/manga\/(\d+)/);
+  return match ? parseInt(match[1], 10) : null;
+}
+
+// Add a series from MAL search result or manual entry
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
   const body = await request.json();
@@ -33,6 +45,7 @@ export async function POST(request: NextRequest) {
     totalChapters,
     totalVolumes,
     link,
+    malLink,
     status,
   } = body;
 
@@ -40,16 +53,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Title is required" }, { status: 400 });
   }
 
+  // For manual entries, try to extract MAL ID from a provided MAL link
+  const resolvedMalId = malId || extractMalId(malLink);
+
   try {
     // Check if series with this MAL ID already exists
-    let series = malId
-      ? await prisma.series.findUnique({ where: { malId } })
+    let series = resolvedMalId
+      ? await prisma.series.findUnique({ where: { malId: resolvedMalId } })
       : null;
 
     if (!series) {
       series = await prisma.series.create({
         data: {
-          malId: malId || null,
+          malId: resolvedMalId || null,
           title,
           imageUrl: imageUrl || null,
           synopsis: synopsis || null,

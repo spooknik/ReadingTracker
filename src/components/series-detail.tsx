@@ -59,6 +59,8 @@ export function SeriesDetail({
   const router = useRouter();
   const [error, setError] = useState("");
   const [joining, setJoining] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const currentUserSeries = series.userSeries.find(
     (us) => us.userId === currentUserId
@@ -82,6 +84,27 @@ export function SeriesDetail({
       setError("Failed to join series");
     } finally {
       setJoining(false);
+    }
+  }
+
+  async function handleDelete() {
+    setDeleting(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/series/${series.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || "Failed to delete");
+        return;
+      }
+      router.push("/");
+      router.refresh();
+    } catch {
+      setError("Failed to delete series");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -205,6 +228,39 @@ export function SeriesDetail({
             />
           );
         })}
+      </div>
+
+      {/* Delete series */}
+      <div className="border-t border-card-border pt-4">
+        {!confirmDelete ? (
+          <button
+            onClick={() => setConfirmDelete(true)}
+            className="w-full rounded-lg border border-red-300 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+          >
+            Remove from Library
+          </button>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-center text-sm text-red-600 dark:text-red-400">
+              Delete <strong>{series.title}</strong> for all users?
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="flex-1 rounded-lg bg-red-600 py-2.5 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+              >
+                {deleting ? "Deleting..." : "Yes, delete"}
+              </button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="flex-1 rounded-lg border border-card-border py-2.5 text-sm font-medium transition-colors hover:bg-slate-50 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

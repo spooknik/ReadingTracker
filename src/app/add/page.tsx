@@ -39,6 +39,8 @@ export default function AddSeriesPage() {
   const [manualTitle, setManualTitle] = useState("");
   const [manualMediaType, setManualMediaType] = useState("MANGA");
   const [manualChapters, setManualChapters] = useState("");
+  const [manualMalLink, setManualMalLink] = useState("");
+  const [manualImageUrl, setManualImageUrl] = useState("");
 
   async function handleSearch() {
     if (query.length < 2) return;
@@ -88,6 +90,8 @@ export default function AddSeriesPage() {
             title: manualTitle,
             mediaType: manualMediaType,
             totalChapters: manualChapters ? parseInt(manualChapters) : null,
+            imageUrl: manualImageUrl || null,
+            malLink: manualMalLink || null,
             link: link || null,
             status,
           };
@@ -320,6 +324,38 @@ export default function AddSeriesPage() {
                 className="w-full rounded-lg border border-card-border bg-card px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-secondary">
+              Cover Image URL
+            </label>
+            <input
+              type="url"
+              value={manualImageUrl}
+              onChange={(e) => setManualImageUrl(e.target.value)}
+              placeholder="https://cdn.myanimelist.net/images/..."
+              className="w-full rounded-lg border border-card-border bg-card px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+            />
+            <p className="mt-1 text-[11px] text-muted">
+              Paste an image URL for the cover art (right-click an image on MAL and copy image address)
+            </p>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-secondary">
+              MAL Page Link
+            </label>
+            <input
+              type="url"
+              value={manualMalLink}
+              onChange={(e) => setManualMalLink(e.target.value)}
+              placeholder="https://myanimelist.net/manga/188486"
+              className="w-full rounded-lg border border-card-border bg-card px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+            />
+            <p className="mt-1 text-[11px] text-muted">
+              Optional link to the MAL page for this series
+            </p>
           </div>
 
           <FormFields
