@@ -45,6 +45,14 @@ const STATUSES = [
   { value: "PLAN_TO_READ", label: "Plan to Read" },
 ];
 
+const MEDIA_TYPES = [
+  { value: "MANGA", label: "Manga" },
+  { value: "MANHWA", label: "Manhwa" },
+  { value: "MANHUA", label: "Manhua" },
+  { value: "LIGHT_NOVEL", label: "Light Novel" },
+  { value: "BOOK", label: "Book" },
+];
+
 interface SeriesDetailProps {
   series: SeriesData;
   allUsers: UserData[];
@@ -61,6 +69,16 @@ export function SeriesDetail({
   const [joining, setJoining] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [editingSeries, setEditingSeries] = useState(false);
+  const [savingSeries, setSavingSeries] = useState(false);
+  const [editTitle, setEditTitle] = useState(series.title);
+  const [editSynopsis, setEditSynopsis] = useState(series.synopsis || "");
+  const [editMediaType, setEditMediaType] = useState(series.mediaType);
+  const [editTotalChapters, setEditTotalChapters] = useState(
+    series.totalChapters?.toString() || ""
+  );
+  const [editLink, setEditLink] = useState(series.link || "");
+  const [editImageUrl, setEditImageUrl] = useState(series.imageUrl || "");
 
   const currentUserSeries = series.userSeries.find(
     (us) => us.userId === currentUserId
@@ -106,6 +124,51 @@ export function SeriesDetail({
     } finally {
       setDeleting(false);
     }
+  }
+
+  async function handleSaveSeries() {
+    if (!editTitle.trim()) {
+      setError("Title cannot be empty");
+      return;
+    }
+    setSavingSeries(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/series/${series.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: editTitle.trim(),
+          synopsis: editSynopsis,
+          mediaType: editMediaType,
+          totalChapters: editTotalChapters ? parseInt(editTotalChapters) : null,
+          link: editLink,
+          imageUrl: editImageUrl,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || "Failed to update series");
+        return;
+      }
+      setEditingSeries(false);
+      router.refresh();
+    } catch {
+      setError("Failed to update series");
+    } finally {
+      setSavingSeries(false);
+    }
+  }
+
+  function cancelEditSeries() {
+    setEditingSeries(false);
+    setEditTitle(series.title);
+    setEditSynopsis(series.synopsis || "");
+    setEditMediaType(series.mediaType);
+    setEditTotalChapters(series.totalChapters?.toString() || "");
+    setEditLink(series.link || "");
+    setEditImageUrl(series.imageUrl || "");
+    setError("");
   }
 
   return (
@@ -162,14 +225,112 @@ export function SeriesDetail({
               Read online
             </a>
           )}
-          <p className="text-xs text-muted">
-            Added by {series.createdBy.displayName}
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="text-xs text-muted">
+              Added by {series.createdBy.displayName}
+            </p>
+            {!editingSeries && (
+              <button
+                onClick={() => setEditingSeries(true)}
+                className="text-xs text-primary hover:underline"
+              >
+                Edit
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
+      {/* Edit series panel */}
+      {editingSeries && (
+        <div className="space-y-3 rounded-xl border border-primary/30 bg-card p-4">
+          <h2 className="text-sm font-semibold">Edit Series</h2>
+          <div>
+            <label className="mb-1 block text-xs text-muted">Title</label>
+            <input
+              type="text"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              className="w-full rounded-lg border border-card-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs text-muted">Type</label>
+              <select
+                value={editMediaType}
+                onChange={(e) => setEditMediaType(e.target.value)}
+                className="w-full rounded-lg border border-card-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+              >
+                {MEDIA_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-muted">Total Chapters</label>
+              <input
+                type="number"
+                min={0}
+                value={editTotalChapters}
+                onChange={(e) => setEditTotalChapters(e.target.value)}
+                placeholder="Ongoing"
+                className="w-full rounded-lg border border-card-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs text-muted">Reading Link</label>
+            <input
+              type="url"
+              value={editLink}
+              onChange={(e) => setEditLink(e.target.value)}
+              placeholder="https://mangadex.org/..."
+              className="w-full rounded-lg border border-card-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs text-muted">Cover Image URL</label>
+            <input
+              type="url"
+              value={editImageUrl}
+              onChange={(e) => setEditImageUrl(e.target.value)}
+              placeholder="https://cdn.myanimelist.net/images/..."
+              className="w-full rounded-lg border border-card-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs text-muted">Synopsis</label>
+            <textarea
+              value={editSynopsis}
+              onChange={(e) => setEditSynopsis(e.target.value)}
+              placeholder="Brief description of the series..."
+              rows={3}
+              className="w-full rounded-lg border border-card-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+            />
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleSaveSeries}
+              disabled={savingSeries}
+              className="flex-1 rounded-lg bg-primary py-2 text-xs font-medium text-white transition-colors hover:bg-primary-hover disabled:opacity-50"
+            >
+              {savingSeries ? "Saving..." : "Save Changes"}
+            </button>
+            <button
+              onClick={cancelEditSeries}
+              className="flex-1 rounded-lg border border-card-border py-2 text-xs font-medium transition-colors hover:bg-slate-50 dark:hover:bg-slate-800"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Synopsis */}
-      {series.synopsis && (
+      {series.synopsis && !editingSeries && (
         <div className="rounded-xl border border-card-border bg-card p-4">
           <h2 className="mb-2 text-sm font-semibold">Synopsis</h2>
           <p className="text-sm leading-relaxed text-secondary line-clamp-6">

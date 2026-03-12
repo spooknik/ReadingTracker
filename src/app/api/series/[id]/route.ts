@@ -143,7 +143,7 @@ export async function DELETE(
   }
 }
 
-// Update series metadata (link, etc.)
+// Update series metadata
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -152,12 +152,20 @@ export async function PUT(
   await getCurrentUser(); // Ensure authenticated
   const body = await request.json();
 
-  const { link, totalChapters } = body;
+  const { title, synopsis, imageUrl, mediaType, totalChapters, link } = body;
+
+  if (title !== undefined && !title.trim()) {
+    return NextResponse.json({ error: "Title cannot be empty" }, { status: 400 });
+  }
 
   try {
     const updateData: Record<string, unknown> = {};
-    if (link !== undefined) updateData.link = link;
-    if (totalChapters !== undefined) updateData.totalChapters = totalChapters;
+    if (title !== undefined) updateData.title = title.trim();
+    if (synopsis !== undefined) updateData.synopsis = synopsis || null;
+    if (imageUrl !== undefined) updateData.imageUrl = imageUrl || null;
+    if (mediaType !== undefined) updateData.mediaType = mediaType;
+    if (totalChapters !== undefined) updateData.totalChapters = totalChapters || null;
+    if (link !== undefined) updateData.link = link || null;
 
     const series = await prisma.series.update({
       where: { id },

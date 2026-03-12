@@ -41,6 +41,7 @@ export default function AddSeriesPage() {
   const [manualChapters, setManualChapters] = useState("");
   const [manualMalLink, setManualMalLink] = useState("");
   const [manualImageUrl, setManualImageUrl] = useState("");
+  const [manualSynopsis, setManualSynopsis] = useState("");
 
   async function handleSearch() {
     if (query.length < 2) return;
@@ -91,6 +92,7 @@ export default function AddSeriesPage() {
             mediaType: manualMediaType,
             totalChapters: manualChapters ? parseInt(manualChapters) : null,
             imageUrl: manualImageUrl || null,
+            synopsis: manualSynopsis || null,
             malLink: manualMalLink || null,
             link: link || null,
             status,
@@ -340,6 +342,19 @@ export default function AddSeriesPage() {
             <p className="mt-1 text-[11px] text-muted">
               Paste an image URL for the cover art (right-click an image on MAL and copy image address)
             </p>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium text-secondary">
+              Synopsis
+            </label>
+            <textarea
+              value={manualSynopsis}
+              onChange={(e) => setManualSynopsis(e.target.value)}
+              placeholder="Brief description of the series..."
+              rows={3}
+              className="w-full rounded-lg border border-card-border bg-card px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+            />
           </div>
 
           <div>
