@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
+/**
+ * Result shape exposed to the client.
+ * Kept the same so the Add Series page doesn't need changes.
+ */
 export interface MALMangaResult {
   id: number;
   title: string;
@@ -15,12 +19,65 @@ export interface MALMangaResult {
   status?: string;
 }
 
-interface MALSearchResponse {
-  data: {
-    node: MALMangaResult;
-  }[];
-  paging?: {
-    next?: string;
+/**
+ * Jikan API v4 manga item shape (fields we use).
+ * Docs: https://docs.api.jikan.moe/#tag/manga/operation/getMangaSearch
+ */
+interface JikanMangaItem {
+  mal_id: number;
+  title: string;
+  images?: {
+    jpg?: {
+      image_url?: string;
+      small_image_url?: string;
+      large_image_url?: string;
+    };
+  };
+  synopsis?: string | null;
+  type?: string | null;
+  chapters?: number | null;
+  volumes?: number | null;
+  score?: number | null;
+  status?: string | null;
+}
+
+interface JikanSearchResponse {
+  data: JikanMangaItem[];
+}
+
+/**
+ * Map Jikan media types to our internal types.
+ * Jikan returns: Manga, Novel, Light Novel, One-shot, Doujinshi, Manhwa, Manhua
+ */
+function mapMediaType(jikanType?: string | null): string {
+  if (!jikanType) return "manga";
+  const t = jikanType.toLowerCase();
+  if (t === "manhwa") return "manhwa";
+  if (t === "manhua") return "manhua";
+  if (t === "light novel" || t === "novel") return "light_novel";
+  return "manga";
+}
+
+/**
+ * Convert a Jikan manga item to our MALMangaResult shape
+ * so the frontend doesn't need any changes.
+ */
+function toMALResult(item: JikanMangaItem): MALMangaResult {
+  return {
+    id: item.mal_id,
+    title: item.title,
+    main_picture: item.images?.jpg
+      ? {
+          medium: item.images.jpg.image_url || "",
+          large: item.images.jpg.large_image_url || item.images.jpg.image_url || "",
+        }
+      : undefined,
+    synopsis: item.synopsis ?? undefined,
+    media_type: mapMediaType(item.type),
+    num_chapters: item.chapters ?? undefined,
+    num_volumes: item.volumes ?? undefined,
+    mean: item.score ?? undefined,
+    status: item.status ?? undefined,
   };
 }
 
@@ -32,42 +89,29 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Query must be at least 2 characters" }, { status: 400 });
   }
 
-  const malClientId = process.env.MAL_CLIENT_ID;
-  if (!malClientId || malClientId === "your_mal_client_id_here") {
-    return NextResponse.json(
-      { error: "MAL API client ID not configured" },
-      { status: 500 }
-    );
-  }
-
   try {
-    const fields = "id,title,main_picture,synopsis,media_type,num_chapters,num_volumes,mean,status";
-    const url = `https://api.myanimelist.net/v2/manga?q=${encodeURIComponent(query)}&limit=25&fields=${fields}`;
+    const url = `https://api.jikan.moe/v4/manga?q=${encodeURIComponent(query)}&limit=25&order_by=favorites&sort=desc`;
 
-    const response = await fetch(url, {
-      headers: {
-        "X-MAL-CLIENT-ID": malClientId,
-      },
-    });
+    const response = await fetch(url);
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("MAL API error:", response.status, errorText);
+      console.error("Jikan API error:", response.status, errorText);
       return NextResponse.json(
-        { error: `MAL API error: ${response.status}` },
+        { error: `Search API error: ${response.status}` },
         { status: response.status }
       );
     }
 
-    const data: MALSearchResponse = await response.json();
+    const data: JikanSearchResponse = await response.json();
 
-    const results = data.data.map((item) => item.node);
+    const results = data.data.map(toMALResult);
 
     return NextResponse.json({ results });
   } catch (error) {
-    console.error("MAL search error:", error);
+    console.error("Search error:", error);
     return NextResponse.json(
-      { error: "Failed to search MAL" },
+      { error: "Failed to search" },
       { status: 500 }
     );
   }
