@@ -445,6 +445,7 @@ function UserProgressCard({
   const [chapter, setChapter] = useState(userSeries.currentChapter);
   const [status, setStatus] = useState(userSeries.status);
   const [rating, setRating] = useState(userSeries.rating ?? 0);
+  const [notes, setNotes] = useState(userSeries.notes || "");
   const [saving, setSaving] = useState(false);
   const [confirmUntrack, setConfirmUntrack] = useState(false);
   const [untracking, setUntracking] = useState(false);
@@ -459,6 +460,7 @@ function UserProgressCard({
           currentChapter: chapter,
           status,
           rating: rating || null,
+          notes: notes || null,
         }),
       });
       if (res.ok) {
@@ -548,6 +550,13 @@ function UserProgressCard({
         )}
       </div>
 
+      {/* Notes */}
+      {userSeries.notes && !editing && (
+        <p className="mt-2 text-xs leading-relaxed text-secondary">
+          {userSeries.notes}
+        </p>
+      )}
+
       {/* Edit controls for current user */}
       {isCurrentUser && !editing && (
         <div className="mt-3 flex gap-2">
@@ -605,6 +614,16 @@ function UserProgressCard({
               ))}
             </select>
           </div>
+          <div>
+            <label className="mb-1 block text-xs text-muted">Notes</label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Your notes about this series..."
+              rows={2}
+              className="w-full rounded-lg border border-card-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+            />
+          </div>
           <div className="flex gap-2">
             <button
               onClick={handleSave}
@@ -620,6 +639,7 @@ function UserProgressCard({
                 setChapter(userSeries.currentChapter);
                 setStatus(userSeries.status);
                 setRating(userSeries.rating ?? 0);
+                setNotes(userSeries.notes || "");
               }}
               className="flex-1 rounded-lg border border-card-border py-2 text-xs font-medium transition-colors hover:bg-slate-50 dark:hover:bg-slate-800"
             >

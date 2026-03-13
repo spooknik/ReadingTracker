@@ -36,6 +36,7 @@ export default function AddSeriesPage() {
   // Form fields (shared between search result and manual)
   const [link, setLink] = useState("");
   const [status, setStatus] = useState("READING");
+  const [notes, setNotes] = useState("");
   const [manualTitle, setManualTitle] = useState("");
   const [manualMediaType, setManualMediaType] = useState("MANGA");
   const [manualChapters, setManualChapters] = useState("");
@@ -85,6 +86,7 @@ export default function AddSeriesPage() {
             totalChapters: selected.num_chapters || null,
             totalVolumes: selected.num_volumes || null,
             link: link || null,
+            notes: notes || null,
             status,
           }
         : {
@@ -95,6 +97,7 @@ export default function AddSeriesPage() {
             synopsis: manualSynopsis || null,
             malLink: manualMalLink || null,
             link: link || null,
+            notes: notes || null,
             status,
           };
 
@@ -267,6 +270,8 @@ export default function AddSeriesPage() {
                 setLink={setLink}
                 status={status}
                 setStatus={setStatus}
+                notes={notes}
+                setNotes={setNotes}
               />
 
               <button
@@ -378,6 +383,8 @@ export default function AddSeriesPage() {
             setLink={setLink}
             status={status}
             setStatus={setStatus}
+            notes={notes}
+            setNotes={setNotes}
           />
 
           <button
@@ -398,11 +405,15 @@ function FormFields({
   setLink,
   status,
   setStatus,
+  notes,
+  setNotes,
 }: {
   link: string;
   setLink: (v: string) => void;
   status: string;
   setStatus: (v: string) => void;
+  notes: string;
+  setNotes: (v: string) => void;
 }) {
   return (
     <>
@@ -434,6 +445,19 @@ function FormFields({
             </option>
           ))}
         </select>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs font-medium text-secondary">
+          Notes
+        </label>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Your notes about this series..."
+          rows={2}
+          className="w-full rounded-lg border border-card-border bg-card px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+        />
       </div>
     </>
   );

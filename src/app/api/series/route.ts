@@ -46,6 +46,7 @@ export async function POST(request: NextRequest) {
     totalVolumes,
     link,
     malLink,
+    notes,
     status,
   } = body;
 
@@ -102,6 +103,7 @@ export async function POST(request: NextRequest) {
         seriesId: series.id,
         status: (status as ReadingStatus) || "PLAN_TO_READ",
         currentChapter: 0,
+        notes: notes || null,
       },
     });
 
