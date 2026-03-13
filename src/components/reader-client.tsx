@@ -424,7 +424,7 @@ export function ReaderClient({ seriesId, seriesTitle }: ReaderClientProps) {
           <p className="text-sm text-secondary">
             {ripInfo?.supported === false
               ? "This reading link is not supported by the built-in reader yet."
-              : "Ripped content is not available yet. You can queue a sync job and refresh once ready."}
+              : "Ripped content is not available yet. You can run Check for Updates to rebuild or sync this series."}
           </p>
           <div className="flex flex-wrap gap-2">
             {ripInfo?.supported !== false && (

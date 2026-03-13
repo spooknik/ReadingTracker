@@ -29,6 +29,15 @@ function guessContentType(fileName: string): string {
   }
 }
 
+function isMissingManifestError(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const maybeErrno = error as { code?: string };
+  return maybeErrno.code === "ENOENT";
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -90,7 +99,14 @@ export async function GET(
   let manifest;
   try {
     manifest = await loadReaderManifest(series.rip.manifestPath);
-  } catch {
+  } catch (error) {
+    if (isMissingManifestError(error)) {
+      return NextResponse.json(
+        { error: "Ripped files are missing on disk. Run Check for Updates to rebuild this series." },
+        { status: 409 },
+      );
+    }
+
     return NextResponse.json(
       { error: "Failed to load reader manifest" },
       { status: 500 },

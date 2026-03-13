@@ -47,6 +47,15 @@ function clampPageIndex(pageIndex: number, max: number): number {
   return pageIndex;
 }
 
+function isMissingManifestError(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const maybeErrno = error as { code?: string };
+  return maybeErrno.code === "ENOENT";
+}
+
 function buildReaderResponse(
   seriesId: string,
   manifest: Awaited<ReturnType<typeof loadReaderManifest>>,
@@ -146,6 +155,15 @@ export async function GET(
   try {
     manifest = await loadReaderManifest(series.rip.manifestPath);
   } catch (error) {
+    if (isMissingManifestError(error)) {
+      return NextResponse.json(
+        {
+          error: "Ripped files are missing on disk. Run Check for Updates to rebuild this series.",
+        },
+        { status: 409 },
+      );
+    }
+
     return NextResponse.json(
       {
         error: "Failed to load reader manifest",
