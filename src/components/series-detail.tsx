@@ -131,7 +131,8 @@ export function SeriesDetail({
   const ripSupported = ripInfo
     ? ripInfo.supported
     : !series.rip || series.rip.status !== "UNSUPPORTED";
-  const ripLastError = ripInfo?.lastError ?? series.rip?.lastError ?? null;
+  const rawRipLastError = ripInfo?.lastError ?? series.rip?.lastError ?? null;
+  const ripLastError = rawRipLastError === "Series link is unsupported for ripping" ? null : rawRipLastError;
   const ripLastSyncedAt = ripInfo?.lastSyncedAt ?? series.rip?.lastSyncedAt ?? null;
   const ripProgress = ripInfo?.progress || null;
   const latestJobStatus = ripInfo?.jobs[0]?.status || series.rip?.jobs[0]?.status || null;
@@ -422,55 +423,61 @@ export function SeriesDetail({
             </a>
           )}
           {readerEnabled && series.link && (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full border border-card-border px-2 py-1 text-[11px] text-muted">
-                Rip: {ripStatusLabel}
-                {currentRipStatus === "RUNNING" && (
-                  <span className="ml-1 inline-flex h-2 w-2 animate-pulse rounded-full bg-primary" />
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {canQueueRip && (
+                  <button
+                    onClick={handleQueueRipNow}
+                    disabled={queueingRip || isRipBusy}
+                    className="rounded-full border border-card-border px-4 py-2 text-xs font-medium transition-colors hover:bg-slate-50 disabled:opacity-50 dark:hover:bg-slate-800"
+                  >
+                    {queueingRip
+                      ? "Queueing..."
+                      : isRipBusy
+                        ? currentRipStatus === "RUNNING"
+                          ? "Ripping..."
+                          : "Queued..."
+                        : currentRipStatus === "READY"
+                          ? "Check for Updates"
+                          : "Queue Rip Sync"}
+                  </button>
                 )}
-              </span>
-              {canOpenReader && (
-                <a
-                  href={`/series/${series.id}/reader`}
-                  className="rounded-full bg-primary px-2.5 py-1 text-[11px] font-medium text-white"
-                >
-                  Open Reader
-                </a>
-              )}
-              {canTrackAndOpenReader && (
-                <button
-                  onClick={handleTrackAndOpenReader}
-                  disabled={joining}
-                  className="rounded-full bg-primary px-2.5 py-1 text-[11px] font-medium text-white disabled:opacity-50"
-                >
-                  {joining ? "Joining..." : "Track + Open Reader"}
-                </button>
-              )}
-              {canQueueRip && (
-                <button
-                  onClick={handleQueueRipNow}
-                  disabled={queueingRip || isRipBusy}
-                  className="rounded-full border border-card-border px-2.5 py-1 text-[11px] font-medium transition-colors hover:bg-slate-50 disabled:opacity-50 dark:hover:bg-slate-800"
-                >
-                  {queueingRip
-                    ? "Queueing..."
-                    : isRipBusy
-                      ? currentRipStatus === "RUNNING"
-                        ? "Ripping..."
-                        : "Queued..."
-                      : currentRipStatus === "READY"
-                        ? "Check for Updates"
-                        : "Queue Rip Sync"}
-                </button>
-              )}
+                {canTrackAndOpenReader && (
+                  <button
+                    onClick={handleTrackAndOpenReader}
+                    disabled={joining}
+                    className="rounded-full bg-primary px-4 py-2 text-xs font-medium text-white disabled:opacity-50"
+                  >
+                    {joining ? "Joining..." : "Track + Open Reader"}
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {canOpenReader && (
+                  <a
+                    href={`/series/${series.id}/reader`}
+                    className="rounded-full bg-primary px-4 py-2 text-xs font-medium text-white"
+                  >
+                    Open Reader
+                  </a>
+                )}
+              </div>
             </div>
           )}
           {readerEnabled && ripLastError && (
             <p className="text-xs text-red-600 dark:text-red-400">Rip error: {ripLastError}</p>
           )}
-          {readerEnabled && ripLastSyncedAt && (
+          {readerEnabled && (ripLastSyncedAt || ripStatusLabel) && (
             <p className="text-[11px] text-muted">
-              Last synced: {formatDateForUi(ripLastSyncedAt)}
+              Last synced: {ripLastSyncedAt ? formatDateForUi(ripLastSyncedAt) : "Never"}
+              {ripStatusLabel && (
+                <>
+                  {" "}• Rip: {ripStatusLabel}
+                  {currentRipStatus === "RUNNING" && (
+                    <span className="ml-1 inline-flex h-2 w-2 animate-pulse rounded-full bg-primary" />
+                  )}
+                </>
+              )}
             </p>
           )}
           <div className="flex items-center gap-2">

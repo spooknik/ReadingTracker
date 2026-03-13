@@ -450,11 +450,11 @@ export function ReaderClient({ seriesId, seriesTitle }: ReaderClientProps) {
         <>
           {renderChapterNav(activeChapter)}
 
-          <div className="space-y-4">
+          <div className="space-y-0">
             {activeChapter.images.map((image, index) => (
               <div
                 key={image.url}
-                className="overflow-hidden rounded-xl border border-card-border bg-card"
+                className="overflow-hidden"
                 ref={(element) => {
                   imageRefs.current[index] = element;
                 }}
@@ -467,7 +467,7 @@ export function ReaderClient({ seriesId, seriesTitle }: ReaderClientProps) {
                   height={1700}
                   unoptimized
                   priority={index === 0}
-                  className="h-auto w-full"
+                  className="block h-auto w-full"
                 />
               </div>
             ))}

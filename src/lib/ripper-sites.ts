@@ -146,6 +146,35 @@ const RIPPER_SITES: RipperSiteDefinition[] = [
       return parts[0];
     },
   },
+  {
+    site: "weebcentral",
+    ripperPath: "tools/weebcentral-ripper/ripper.mjs",
+    normalizeSeriesUrl: (url) => {
+      if (url.hostname !== "weebcentral.com" && url.hostname !== "www.weebcentral.com") {
+        return null;
+      }
+
+      const pathParts = url.pathname.split("/").filter(Boolean);
+      if (pathParts.length < 2 || pathParts[0] !== "series") {
+        return null;
+      }
+
+      const seriesId = pathParts[1];
+      if (!seriesId) {
+        return null;
+      }
+
+      const seriesSlug = pathParts[2];
+      return seriesSlug
+        ? `https://weebcentral.com/series/${seriesId}/${seriesSlug}`
+        : `https://weebcentral.com/series/${seriesId}`;
+    },
+    extractSeriesSlug: (normalizedSeriesUrl) => {
+      const url = new URL(normalizedSeriesUrl);
+      const parts = url.pathname.split("/").filter(Boolean);
+      return parts[1];
+    },
+  },
 ];
 
 export function isHttpUrl(value: string): boolean {
