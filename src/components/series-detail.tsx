@@ -137,15 +137,12 @@ export function SeriesDetail({
   const latestJobStatus = ripInfo?.jobs[0]?.status || series.rip?.jobs[0]?.status || null;
   const hasActiveRipJob = latestJobStatus === "QUEUED" || latestJobStatus === "RUNNING";
   const isRipBusy = currentRipStatus === "RUNNING" || hasActiveRipJob;
-  const hasReadableRipContent = Boolean(
-    ripProgress && ripProgress.completedChapters > 0,
-  );
   const canOpenReader = Boolean(
-    readerEnabled && isTracking && (currentRipStatus === "READY" || hasReadableRipContent),
+    readerEnabled && isTracking && currentRipStatus === "READY" && !isRipBusy,
   );
   const canQueueRip = Boolean(readerEnabled && series.link && ripSupported);
   const canTrackAndOpenReader = Boolean(
-    readerEnabled && !isTracking && (currentRipStatus === "READY" || hasReadableRipContent),
+    readerEnabled && !isTracking && currentRipStatus === "READY" && !isRipBusy,
   );
 
   const loadRipStatus = useCallback(async () => {
@@ -374,7 +371,7 @@ export function SeriesDetail({
     <div className="space-y-6">
       {/* Back button */}
       <button
-        onClick={() => router.back()}
+        onClick={() => router.push("/")}
         className="flex items-center gap-1 text-sm text-muted hover:text-foreground"
       >
         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
