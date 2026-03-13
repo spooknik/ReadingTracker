@@ -144,6 +144,9 @@ export function SeriesDetail({
     readerEnabled && isTracking && (currentRipStatus === "READY" || hasReadableRipContent),
   );
   const canQueueRip = Boolean(readerEnabled && series.link && ripSupported);
+  const canTrackAndOpenReader = Boolean(
+    readerEnabled && !isTracking && (currentRipStatus === "READY" || hasReadableRipContent),
+  );
 
   const loadRipStatus = useCallback(async () => {
     if (!readerEnabled || !series.link) {
@@ -217,6 +220,15 @@ export function SeriesDetail({
       .replace(/\b\w/g, (c) => c.toUpperCase());
   }
 
+  function formatDateForUi(value: string | Date) {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return "Unknown";
+    }
+
+    return `${parsed.toISOString().replace("T", " ").replace(".000Z", " UTC")}`;
+  }
+
   async function handleQueueRipNow() {
     setQueueingRip(true);
     setError("");
@@ -260,6 +272,33 @@ export function SeriesDetail({
       router.refresh();
     } catch {
       setError("Failed to join series");
+    } finally {
+      setJoining(false);
+    }
+  }
+
+  async function handleTrackAndOpenReader() {
+    setJoining(true);
+    setError("");
+
+    try {
+      const res = await fetch(`/api/series/${series.id}`, {
+        method: "POST",
+      });
+
+      if (!res.ok && res.status !== 409) {
+        const data = await res.json().catch(() => {
+          return {};
+        });
+
+        setError(data.error || "Failed to start tracking");
+        return;
+      }
+
+      router.push(`/series/${series.id}/reader`);
+      router.refresh();
+    } catch {
+      setError("Failed to start tracking");
     } finally {
       setJoining(false);
     }
@@ -401,6 +440,15 @@ export function SeriesDetail({
                   Open Reader
                 </a>
               )}
+              {canTrackAndOpenReader && (
+                <button
+                  onClick={handleTrackAndOpenReader}
+                  disabled={joining}
+                  className="rounded-full bg-primary px-2.5 py-1 text-[11px] font-medium text-white disabled:opacity-50"
+                >
+                  {joining ? "Joining..." : "Track + Open Reader"}
+                </button>
+              )}
               {canQueueRip && (
                 <button
                   onClick={handleQueueRipNow}
@@ -425,7 +473,7 @@ export function SeriesDetail({
           )}
           {readerEnabled && ripLastSyncedAt && (
             <p className="text-[11px] text-muted">
-              Last synced: {new Date(ripLastSyncedAt).toLocaleString()}
+              Last synced: {formatDateForUi(ripLastSyncedAt)}
             </p>
           )}
           <div className="flex items-center gap-2">
