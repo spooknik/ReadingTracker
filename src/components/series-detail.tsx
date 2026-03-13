@@ -6,8 +6,6 @@ import Image from "next/image";
 import { StatusBadge, MediaTypeBadge } from "./badges";
 import type { ReadingStatus } from "@/generated/prisma/client";
 
-const READER_ENABLED = process.env.NEXT_PUBLIC_ENABLE_READER === "1";
-
 interface UserData {
   id: string;
   email: string;
@@ -98,12 +96,14 @@ interface SeriesDetailProps {
   series: SeriesData;
   allUsers: UserData[];
   currentUserId: string;
+  readerEnabled: boolean;
 }
 
 export function SeriesDetail({
   series,
   allUsers,
   currentUserId,
+  readerEnabled,
 }: SeriesDetailProps) {
   const router = useRouter();
   const [error, setError] = useState("");
@@ -141,12 +141,12 @@ export function SeriesDetail({
     ripProgress && ripProgress.completedChapters > 0,
   );
   const canOpenReader = Boolean(
-    READER_ENABLED && isTracking && (currentRipStatus === "READY" || hasReadableRipContent),
+    readerEnabled && isTracking && (currentRipStatus === "READY" || hasReadableRipContent),
   );
-  const canQueueRip = Boolean(READER_ENABLED && series.link && ripSupported);
+  const canQueueRip = Boolean(readerEnabled && series.link && ripSupported);
 
   const loadRipStatus = useCallback(async () => {
-    if (!READER_ENABLED || !series.link) {
+    if (!readerEnabled || !series.link) {
       return;
     }
 
@@ -165,18 +165,18 @@ export function SeriesDetail({
     } catch {
       // Silently fail
     }
-  }, [series.id, series.link]);
+  }, [readerEnabled, series.id, series.link]);
 
   useEffect(() => {
-    if (!READER_ENABLED || !series.link) {
+    if (!readerEnabled || !series.link) {
       return;
     }
 
     void loadRipStatus();
-  }, [loadRipStatus, series.link]);
+  }, [loadRipStatus, readerEnabled, series.link]);
 
   useEffect(() => {
-    if (!READER_ENABLED || !series.link || !isRipBusy) {
+    if (!readerEnabled || !series.link || !isRipBusy) {
       return;
     }
 
@@ -187,7 +187,7 @@ export function SeriesDetail({
     return () => {
       clearInterval(timer);
     };
-  }, [isRipBusy, loadRipStatus, series.link]);
+  }, [isRipBusy, loadRipStatus, readerEnabled, series.link]);
 
   const ripStatusLabel = useMemo(() => {
     if (currentRipStatus === "RUNNING") {
@@ -385,7 +385,7 @@ export function SeriesDetail({
               Read online
             </a>
           )}
-          {READER_ENABLED && series.link && (
+          {readerEnabled && series.link && (
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-full border border-card-border px-2 py-1 text-[11px] text-muted">
                 Rip: {ripStatusLabel}
@@ -420,10 +420,10 @@ export function SeriesDetail({
               )}
             </div>
           )}
-          {READER_ENABLED && ripLastError && (
+          {readerEnabled && ripLastError && (
             <p className="text-xs text-red-600 dark:text-red-400">Rip error: {ripLastError}</p>
           )}
-          {READER_ENABLED && ripLastSyncedAt && (
+          {readerEnabled && ripLastSyncedAt && (
             <p className="text-[11px] text-muted">
               Last synced: {new Date(ripLastSyncedAt).toLocaleString()}
             </p>

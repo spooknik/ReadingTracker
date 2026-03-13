@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { SeriesDetail } from "@/components/series-detail";
+import { isReaderEnabled } from "@/lib/reader-flags";
 
 interface SeriesPageProps {
   params: Promise<{ id: string }>;
@@ -10,6 +11,7 @@ interface SeriesPageProps {
 export default async function SeriesPage({ params }: SeriesPageProps) {
   const { id } = await params;
   const currentUser = await getCurrentUser();
+  const readerEnabled = isReaderEnabled();
 
   const series = await prisma.series.findUnique({
     where: { id },
@@ -42,6 +44,7 @@ export default async function SeriesPage({ params }: SeriesPageProps) {
       series={series}
       allUsers={allUsers}
       currentUserId={currentUser.id}
+      readerEnabled={readerEnabled}
     />
   );
 }
