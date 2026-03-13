@@ -11,6 +11,7 @@ interface RawManifestChapter {
   slug?: unknown;
   title?: unknown;
   status?: unknown;
+  missingFromSource?: unknown;
   chapterOrder?: unknown;
   scene?: unknown;
   episodeId?: unknown;
@@ -55,6 +56,15 @@ export interface ReaderManifestData {
   title: string;
   updatedAt: string | null;
   chapters: ReaderManifestChapter[];
+}
+
+export interface RipManifestProgress {
+  totalChapters: number;
+  completedChapters: number;
+  failedChapters: number;
+  pendingChapters: number;
+  runningChapterSlug: string | null;
+  runningChapterIndex: number | null;
 }
 
 function asString(value: unknown): string | null {
@@ -249,4 +259,65 @@ export function findBestChapterSlugForProgress(
   }
 
   return chapters[chapters.length - 1].slug;
+}
+
+export async function loadRipManifestProgress(manifestPath: string): Promise<RipManifestProgress | null> {
+  const rawText = await readFile(manifestPath, "utf8");
+
+  let parsed: RawManifest;
+  try {
+    parsed = JSON.parse(rawText) as RawManifest;
+  } catch {
+    return null;
+  }
+
+  const rawChapters = Array.isArray(parsed.chapters) ? parsed.chapters : [];
+
+  let totalChapters = 0;
+  let completedChapters = 0;
+  let failedChapters = 0;
+  let pendingChapters = 0;
+  let runningChapterSlug: string | null = null;
+  let runningChapterIndex: number | null = null;
+  let visibleChapterIndex = 0;
+
+  for (const chapterCandidate of rawChapters) {
+    const chapter = chapterCandidate as RawManifestChapter;
+    if (chapter.missingFromSource === true) {
+      continue;
+    }
+
+    visibleChapterIndex += 1;
+    totalChapters += 1;
+
+    const status = (asString(chapter.status) || "pending").toLowerCase();
+    if (status === "completed") {
+      completedChapters += 1;
+      continue;
+    }
+
+    if (status === "failed") {
+      failedChapters += 1;
+      continue;
+    }
+
+    pendingChapters += 1;
+    if (!runningChapterSlug && status === "downloading") {
+      runningChapterSlug = asString(chapter.slug);
+      runningChapterIndex = visibleChapterIndex;
+    }
+  }
+
+  if (totalChapters === 0) {
+    return null;
+  }
+
+  return {
+    totalChapters,
+    completedChapters,
+    failedChapters,
+    pendingChapters,
+    runningChapterSlug,
+    runningChapterIndex,
+  };
 }

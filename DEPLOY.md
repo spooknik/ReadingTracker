@@ -110,6 +110,9 @@ DB_PASSWORD=change_me_to_a_strong_password
 # MyAnimeList API Client ID
 # Get yours at https://myanimelist.net/apiconfig
 MAL_CLIENT_ID=your_mal_client_id_here
+
+# Optional: bind mount rip files to a host path
+# RIPS_HOST_PATH=/opt/ReadingTracker/data/rips
 EOF
 ```
 

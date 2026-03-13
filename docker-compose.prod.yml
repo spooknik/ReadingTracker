@@ -21,7 +21,7 @@ services:
       RIP_WORKER_SECRET: "${RIP_WORKER_SECRET:-}"
       NODE_ENV: production
     volumes:
-      - rips:/app/data/rips
+      - ${RIPS_HOST_PATH:-./data/rips}:/app/data/rips
     depends_on:
       db:
         condition: service_healthy
@@ -48,4 +48,3 @@ services:
 
 volumes:
   pgdata:
-  rips:

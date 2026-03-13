@@ -40,7 +40,6 @@ export default async function ReaderPage({ params }: ReaderPageProps) {
     <ReaderClient
       seriesId={series.id}
       seriesTitle={series.title}
-      ripStatus={series.rip?.status || "UNSUPPORTED"}
     />
   );
 }

@@ -80,6 +80,9 @@ RIP_WORKER_SECRET=<generate-a-long-random-secret>
 
 # Optional: custom rip output root (inside container)
 # RIPPER_OUTPUT_ROOT=/app/data/rips
+
+# Optional: host directory to bind-mount at /app/data/rips (recommended)
+# RIPS_HOST_PATH=/opt/ReadingTracker/data/rips
 ```
 
 Generate a secret if needed:
@@ -89,6 +92,12 @@ openssl rand -hex 32
 ```
 
 ## 4) Rebuild and Restart
+
+If using host-mounted rips, create the host directory first:
+
+```bash
+mkdir -p "${RIPS_HOST_PATH:-/opt/ReadingTracker/data/rips}"
+```
 
 ```bash
 docker compose -f docker-compose.prod.yml up -d --build
@@ -126,7 +135,14 @@ docker compose -f docker-compose.prod.yml exec app sh -lc 'mkdir -p /app/data/ri
 If you get permission errors:
 
 ```bash
+chown -R 1001:1001 "${RIPS_HOST_PATH:-/opt/ReadingTracker/data/rips}"
 docker compose -f docker-compose.prod.yml exec -u root app sh -lc 'mkdir -p /app/data/rips && chown -R nextjs:nodejs /app/data/rips'
+```
+
+You can inspect files directly on host:
+
+```bash
+ls -lah "${RIPS_HOST_PATH:-/opt/ReadingTracker/data/rips}"
 ```
 
 ## 8) Set Up Worker Processing (Recommended)

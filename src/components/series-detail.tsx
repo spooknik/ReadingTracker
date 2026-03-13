@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { StatusBadge, MediaTypeBadge } from "./badges";
@@ -53,6 +53,31 @@ interface SeriesData {
   } | null;
 }
 
+interface RipStatusResponse {
+  supported: boolean;
+  status: string;
+  site: string | null;
+  lastError: string | null;
+  lastSyncedAt: string | null;
+  progress?: {
+    totalChapters: number;
+    completedChapters: number;
+    failedChapters: number;
+    pendingChapters: number;
+    runningChapterSlug: string | null;
+    runningChapterIndex: number | null;
+  } | null;
+  jobs: Array<{
+    id: string;
+    kind: string;
+    status: string;
+    createdAt: string;
+    startedAt: string | null;
+    finishedAt: string | null;
+    error: string | null;
+  }>;
+}
+
 const STATUSES = [
   { value: "READING", label: "Reading" },
   { value: "COMPLETED", label: "Completed" },
@@ -96,15 +121,89 @@ export function SeriesDetail({
   const [editLink, setEditLink] = useState(series.link || "");
   const [editImageUrl, setEditImageUrl] = useState(series.imageUrl || "");
   const [queueingRip, setQueueingRip] = useState(false);
+  const [ripInfo, setRipInfo] = useState<RipStatusResponse | null>(null);
 
   const currentUserSeries = series.userSeries.find(
     (us) => us.userId === currentUserId
   );
   const isTracking = !!currentUserSeries;
-  const canOpenReader = Boolean(READER_ENABLED && isTracking && series.rip?.status === "READY");
-  const canQueueRip = Boolean(
-    READER_ENABLED && series.link && (!series.rip || series.rip.status !== "UNSUPPORTED"),
-  );
+  const currentRipStatus = ripInfo?.status || series.rip?.status || "UNSUPPORTED";
+  const ripSupported = ripInfo
+    ? ripInfo.supported
+    : !series.rip || series.rip.status !== "UNSUPPORTED";
+  const ripLastError = ripInfo?.lastError ?? series.rip?.lastError ?? null;
+  const ripLastSyncedAt = ripInfo?.lastSyncedAt ?? series.rip?.lastSyncedAt ?? null;
+  const ripProgress = ripInfo?.progress || null;
+  const latestJobStatus = ripInfo?.jobs[0]?.status || series.rip?.jobs[0]?.status || null;
+  const hasActiveRipJob = latestJobStatus === "QUEUED" || latestJobStatus === "RUNNING";
+  const isRipBusy = currentRipStatus === "RUNNING" || hasActiveRipJob;
+  const canOpenReader = Boolean(READER_ENABLED && isTracking && currentRipStatus === "READY");
+  const canQueueRip = Boolean(READER_ENABLED && series.link && ripSupported);
+
+  const loadRipStatus = useCallback(async () => {
+    if (!READER_ENABLED || !series.link) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/series/${series.id}/rip`, {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const payload = (await response.json()) as RipStatusResponse;
+      setRipInfo(payload);
+    } catch {
+      // Silently fail
+    }
+  }, [series.id, series.link]);
+
+  useEffect(() => {
+    if (!READER_ENABLED || !series.link) {
+      return;
+    }
+
+    void loadRipStatus();
+  }, [loadRipStatus, series.link]);
+
+  useEffect(() => {
+    if (!READER_ENABLED || !series.link || !isRipBusy) {
+      return;
+    }
+
+    const timer = setInterval(() => {
+      void loadRipStatus();
+    }, 4000);
+
+    return () => {
+      clearInterval(timer);
+    };
+  }, [isRipBusy, loadRipStatus, series.link]);
+
+  const ripStatusLabel = useMemo(() => {
+    if (currentRipStatus === "RUNNING") {
+      if (ripProgress && ripProgress.totalChapters > 0) {
+        const current = ripProgress.runningChapterIndex || ripProgress.completedChapters + 1;
+        return `Ripping chapter ${Math.min(current, ripProgress.totalChapters)} of ${ripProgress.totalChapters}`;
+      }
+
+      return "Ripping chapters";
+    }
+
+    if (currentRipStatus === "PENDING") {
+      return hasActiveRipJob ? "Queued for ripping" : "Ready to sync";
+    }
+
+    if (currentRipStatus === "READY" && ripProgress && ripProgress.totalChapters > 0) {
+      return `Ready (${ripProgress.completedChapters}/${ripProgress.totalChapters} chapters)`;
+    }
+
+    return formatRipStatus(currentRipStatus);
+  }, [currentRipStatus, hasActiveRipJob, ripProgress]);
 
   function formatRipStatus(status: string) {
     return status
@@ -132,6 +231,7 @@ export function SeriesDetail({
         return;
       }
 
+      await loadRipStatus();
       router.refresh();
     } catch {
       setError("Failed to queue rip sync");
@@ -283,7 +383,10 @@ export function SeriesDetail({
           {READER_ENABLED && series.link && (
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-full border border-card-border px-2 py-1 text-[11px] text-muted">
-                Rip: {formatRipStatus(series.rip?.status || "UNSUPPORTED")}
+                Rip: {ripStatusLabel}
+                {currentRipStatus === "RUNNING" && (
+                  <span className="ml-1 inline-flex h-2 w-2 animate-pulse rounded-full bg-primary" />
+                )}
               </span>
               {canOpenReader && (
                 <a
@@ -293,23 +396,31 @@ export function SeriesDetail({
                   Open Reader
                 </a>
               )}
-              {canQueueRip && !canOpenReader && (
+              {canQueueRip && (
                 <button
                   onClick={handleQueueRipNow}
-                  disabled={queueingRip}
+                  disabled={queueingRip || isRipBusy}
                   className="rounded-full border border-card-border px-2.5 py-1 text-[11px] font-medium transition-colors hover:bg-slate-50 disabled:opacity-50 dark:hover:bg-slate-800"
                 >
-                  {queueingRip ? "Queueing..." : "Queue Rip Sync"}
+                  {queueingRip
+                    ? "Queueing..."
+                    : isRipBusy
+                      ? currentRipStatus === "RUNNING"
+                        ? "Ripping..."
+                        : "Queued..."
+                      : currentRipStatus === "READY"
+                        ? "Check for Updates"
+                        : "Queue Rip Sync"}
                 </button>
               )}
             </div>
           )}
-          {READER_ENABLED && series.rip?.lastError && (
-            <p className="text-xs text-red-600 dark:text-red-400">Rip error: {series.rip.lastError}</p>
+          {READER_ENABLED && ripLastError && (
+            <p className="text-xs text-red-600 dark:text-red-400">Rip error: {ripLastError}</p>
           )}
-          {READER_ENABLED && series.rip?.lastSyncedAt && (
+          {READER_ENABLED && ripLastSyncedAt && (
             <p className="text-[11px] text-muted">
-              Last synced: {new Date(series.rip.lastSyncedAt).toLocaleString()}
+              Last synced: {new Date(ripLastSyncedAt).toLocaleString()}
             </p>
           )}
           <div className="flex items-center gap-2">

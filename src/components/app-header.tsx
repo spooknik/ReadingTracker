@@ -1,6 +1,16 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 export function AppHeader() {
+  const pathname = usePathname();
+  const isReaderRoute = /^\/series\/[^/]+\/reader$/.test(pathname);
+
+  if (isReaderRoute) {
+    return null;
+  }
+
   return (
     <Link href="/" className="flex items-center gap-3 py-3 select-none">
       <pre

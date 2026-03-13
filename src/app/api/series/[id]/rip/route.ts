@@ -4,6 +4,19 @@ import { getCurrentUser } from "@/lib/auth";
 import { getSeriesRipPaths, resolveRipperSite } from "@/lib/ripper-sites";
 import { enqueueRipJob, triggerRipQueueProcessing } from "@/lib/rip-queue";
 import { isReaderEnabled } from "@/lib/reader-flags";
+import { loadRipManifestProgress } from "@/lib/reader-manifest";
+
+async function getManifestProgress(manifestPath: string | null): Promise<Awaited<ReturnType<typeof loadRipManifestProgress>>> {
+  if (!manifestPath) {
+    return null;
+  }
+
+  try {
+    return await loadRipManifestProgress(manifestPath);
+  } catch {
+    return null;
+  }
+}
 
 export async function GET(
   _request: NextRequest,
@@ -40,6 +53,8 @@ export async function GET(
   }
 
   if (series.rip) {
+    const progress = await getManifestProgress(series.rip.manifestPath);
+
     return NextResponse.json({
       supported: series.rip.status !== "UNSUPPORTED",
       status: series.rip.status,
@@ -49,6 +64,7 @@ export async function GET(
       manifestPath: series.rip.manifestPath,
       lastError: series.rip.lastError,
       lastSyncedAt: series.rip.lastSyncedAt,
+      progress,
       jobs: series.rip.jobs.map((job) => {
         return {
           id: job.id,
@@ -75,6 +91,7 @@ export async function GET(
       manifestPath: null,
       lastError: null,
       lastSyncedAt: null,
+      progress: null,
       jobs: [],
     });
   }
@@ -90,6 +107,7 @@ export async function GET(
     manifestPath: paths.manifestPath,
     lastError: null,
     lastSyncedAt: null,
+    progress: null,
     jobs: [],
   });
 }

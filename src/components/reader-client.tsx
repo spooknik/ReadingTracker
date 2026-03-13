@@ -38,6 +38,14 @@ interface RipStatusResponse {
   site: string | null;
   lastError: string | null;
   lastSyncedAt: string | null;
+  progress?: {
+    totalChapters: number;
+    completedChapters: number;
+    failedChapters: number;
+    pendingChapters: number;
+    runningChapterSlug: string | null;
+    runningChapterIndex: number | null;
+  } | null;
   jobs: Array<{
     id: string;
     kind: string;
@@ -52,7 +60,6 @@ interface RipStatusResponse {
 interface ReaderClientProps {
   seriesId: string;
   seriesTitle: string;
-  ripStatus: string;
 }
 
 function formatRipStatus(status: string): string {
@@ -70,7 +77,7 @@ function formatChapterLabel(chapter: ReaderChapter): string {
   return chapter.title;
 }
 
-export function ReaderClient({ seriesId, seriesTitle, ripStatus }: ReaderClientProps) {
+export function ReaderClient({ seriesId, seriesTitle }: ReaderClientProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -89,11 +96,35 @@ export function ReaderClient({ seriesId, seriesTitle, ripStatus }: ReaderClientP
   const pageParam = searchParams.get("page");
 
   const activeChapter = content?.chapters[0] || null;
-  const totalPages = activeChapter?.images.length || 0;
 
-  const readableRipStatus = useMemo(() => {
-    return formatRipStatus(ripStatus);
-  }, [ripStatus]);
+  const ripStatusLabel = useMemo(() => {
+    if (!ripInfo) {
+      return "";
+    }
+
+    if (ripInfo.status === "RUNNING") {
+      const progress = ripInfo.progress;
+      if (progress && progress.totalChapters > 0) {
+        const current = progress.runningChapterIndex || progress.completedChapters + 1;
+        return `Ripping chapter ${Math.min(current, progress.totalChapters)} of ${progress.totalChapters}`;
+      }
+
+      return "Ripping chapters";
+    }
+
+    if (ripInfo.status === "PENDING") {
+      const hasQueuedJob = ripInfo.jobs.some((job) => {
+        return job.status === "QUEUED" || job.status === "RUNNING";
+      });
+      return hasQueuedJob ? "Queued for ripping" : "Ready to sync";
+    }
+
+    if (ripInfo.status === "READY") {
+      return "";
+    }
+
+    return formatRipStatus(ripInfo.status);
+  }, [ripInfo]);
 
   const loadRipStatus = useCallback(async () => {
     const response = await fetch(`/api/series/${seriesId}/rip`, {
@@ -236,6 +267,34 @@ export function ReaderClient({ seriesId, seriesTitle, ripStatus }: ReaderClientP
   }, [activeChapter, seriesId]);
 
   useEffect(() => {
+    if (!ripInfo) {
+      return;
+    }
+
+    const status = ripInfo.status;
+    if (status !== "RUNNING" && status !== "PENDING") {
+      return;
+    }
+
+    const timer = setInterval(() => {
+      void (async () => {
+        try {
+          const currentStatus = await loadRipStatus();
+          if (!content && currentStatus.status === "READY") {
+            await loadReaderContent();
+          }
+        } catch {
+          return undefined;
+        }
+      })();
+    }, 3000);
+
+    return () => {
+      clearInterval(timer);
+    };
+  }, [content, loadReaderContent, loadRipStatus, ripInfo]);
+
+  useEffect(() => {
     return () => {
       if (saveTimerRef.current) {
         clearTimeout(saveTimerRef.current);
@@ -299,14 +358,46 @@ export function ReaderClient({ seriesId, seriesTitle, ripStatus }: ReaderClientP
     router.push(`${pathname}?${params.toString()}`);
   }
 
+  function renderChapterNav(chapter: ReaderChapter) {
+    return (
+      <div className="flex items-center justify-between rounded-xl border border-card-border bg-card p-3">
+        <div>
+          <p className="text-sm font-semibold">{formatChapterLabel(chapter)}</p>
+          <p className="text-xs text-muted">{chapter.title}</p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={openPreviousChapter}
+            disabled={!content?.hasPrevious}
+            className="rounded-lg border border-card-border px-3 py-2 text-xs font-medium disabled:opacity-50"
+          >
+            Prev
+          </button>
+          <button
+            onClick={openNextChapter}
+            disabled={!content?.hasNext}
+            className="rounded-lg border border-card-border px-3 py-2 text-xs font-medium disabled:opacity-50"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4 pb-20">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold">{seriesTitle}</h1>
-          <p className="text-xs text-muted">
-            Reader status: {ripInfo ? formatRipStatus(ripInfo.status) : readableRipStatus}
-          </p>
+          {ripStatusLabel && (
+            <p className="text-xs text-muted">
+              {ripStatusLabel}
+              {ripInfo?.status === "RUNNING" && (
+                <span className="ml-2 inline-flex h-2 w-2 animate-pulse rounded-full bg-primary" />
+              )}
+            </p>
+          )}
         </div>
         <Link
           href={`/series/${seriesId}`}
@@ -342,17 +433,9 @@ export function ReaderClient({ seriesId, seriesTitle, ripStatus }: ReaderClientP
                 disabled={requestingRip}
                 className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-hover disabled:opacity-50"
               >
-                {requestingRip ? "Queueing..." : "Queue Rip Sync"}
+                {requestingRip ? "Queueing..." : "Check for Updates"}
               </button>
             )}
-            <button
-              onClick={() => {
-                void loadAll();
-              }}
-              className="rounded-lg border border-card-border px-4 py-2 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800"
-            >
-              Refresh Status
-            </button>
           </div>
           {ripInfo && ripInfo.jobs.length > 0 && (
             <div className="rounded-lg border border-card-border bg-background p-3 text-xs text-muted">
@@ -365,38 +448,7 @@ export function ReaderClient({ seriesId, seriesTitle, ripStatus }: ReaderClientP
 
       {!loading && content && activeChapter && (
         <>
-          <div className="flex items-center justify-between rounded-xl border border-card-border bg-card p-3">
-            <div>
-              <p className="text-sm font-semibold">{formatChapterLabel(activeChapter)}</p>
-              <p className="text-xs text-muted">
-                {activeChapter.title} · Page {Math.min(content.currentPageIndex + 1, totalPages)} of {totalPages}
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={openPreviousChapter}
-                disabled={!content.hasPrevious}
-                className="rounded-lg border border-card-border px-3 py-2 text-xs font-medium disabled:opacity-50"
-              >
-                Prev
-              </button>
-              <button
-                onClick={openNextChapter}
-                disabled={!content.hasNext}
-                className="rounded-lg border border-card-border px-3 py-2 text-xs font-medium disabled:opacity-50"
-              >
-                Next
-              </button>
-              <button
-                onClick={async () => {
-                  await loadAll();
-                }}
-                className="rounded-lg border border-card-border px-3 py-2 text-xs font-medium"
-              >
-                Refresh
-              </button>
-            </div>
-          </div>
+          {renderChapterNav(activeChapter)}
 
           <div className="space-y-4">
             {activeChapter.images.map((image, index) => (
@@ -420,6 +472,8 @@ export function ReaderClient({ seriesId, seriesTitle, ripStatus }: ReaderClientP
               </div>
             ))}
           </div>
+
+          {renderChapterNav(activeChapter)}
         </>
       )}
     </div>
