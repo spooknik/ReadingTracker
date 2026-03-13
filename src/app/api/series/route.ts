@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { MediaType, ReadingStatus } from "@/generated/prisma/client";
+import { getSeriesRipPaths, resolveRipperSite } from "@/lib/ripper-sites";
+import { enqueueRipJob } from "@/lib/rip-queue";
+import { isAutoRipEnabled, isReaderEnabled } from "@/lib/reader-flags";
 
 // Map MAL media_type to our MediaType enum
 function mapMediaType(malType?: string): MediaType {
@@ -50,6 +53,9 @@ export async function POST(request: NextRequest) {
     status,
   } = body;
 
+  const normalizedLink = typeof link === "string" ? link.trim() : "";
+  const linkValue = normalizedLink.length > 0 ? normalizedLink : null;
+
   if (!title) {
     return NextResponse.json({ error: "Title is required" }, { status: 400 });
   }
@@ -73,9 +79,14 @@ export async function POST(request: NextRequest) {
           mediaType: malId ? mapMediaType(mediaType) : (mediaType as MediaType) || "MANGA",
           totalChapters: totalChapters || null,
           totalVolumes: totalVolumes || null,
-          link: link || null,
+          link: linkValue,
           createdById: user.id,
         },
+      });
+    } else if (!series.link && linkValue) {
+      series = await prisma.series.update({
+        where: { id: series.id },
+        data: { link: linkValue },
       });
     }
 
@@ -94,6 +105,58 @@ export async function POST(request: NextRequest) {
         { error: "You are already tracking this series", series },
         { status: 409 }
       );
+    }
+
+    if (linkValue && isReaderEnabled()) {
+      const resolvedRipperSite = resolveRipperSite(linkValue);
+      if (resolvedRipperSite) {
+        const ripPaths = getSeriesRipPaths(resolvedRipperSite);
+
+        const seriesRip = await prisma.seriesRip.upsert({
+          where: { seriesId: series.id },
+          create: {
+            seriesId: series.id,
+            site: resolvedRipperSite.site,
+            normalizedUrl: resolvedRipperSite.normalizedSeriesUrl,
+            outputDir: ripPaths.outputDir,
+            manifestPath: ripPaths.manifestPath,
+            status: "PENDING",
+          },
+          update: {
+            site: resolvedRipperSite.site,
+            normalizedUrl: resolvedRipperSite.normalizedSeriesUrl,
+            outputDir: ripPaths.outputDir,
+            manifestPath: ripPaths.manifestPath,
+            status: "PENDING",
+            lastError: null,
+          },
+        });
+
+        if (isAutoRipEnabled()) {
+          await enqueueRipJob(seriesRip.id, "SYNC");
+        }
+      } else {
+        await prisma.seriesRip.upsert({
+          where: { seriesId: series.id },
+          create: {
+            seriesId: series.id,
+            status: "UNSUPPORTED",
+            site: null,
+            normalizedUrl: null,
+            outputDir: null,
+            manifestPath: null,
+            lastError: "Series link is unsupported for ripping",
+          },
+          update: {
+            status: "UNSUPPORTED",
+            site: null,
+            normalizedUrl: null,
+            outputDir: null,
+            manifestPath: null,
+            lastError: "Series link is unsupported for ripping",
+          },
+        });
+      }
     }
 
     // Add user tracking

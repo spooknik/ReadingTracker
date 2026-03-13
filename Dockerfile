@@ -36,6 +36,12 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# Copy ripper scripts for runtime sync jobs
+COPY --from=builder --chown=nextjs:nodejs /app/tools/manhwaden-ripper ./tools/manhwaden-ripper
+COPY --from=builder --chown=nextjs:nodejs /app/tools/dynasty-ripper ./tools/dynasty-ripper
+COPY --from=builder --chown=nextjs:nodejs /app/tools/tapas-ripper ./tools/tapas-ripper
+COPY --from=builder --chown=nextjs:nodejs /app/tools/mangabuddy-ripper ./tools/mangabuddy-ripper
+
 # Copy Prisma schema, migrations, config, and generated client for runtime migration
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts

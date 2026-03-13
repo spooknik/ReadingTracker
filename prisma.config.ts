@@ -1,6 +1,4 @@
-// Prisma v7 config file
-// dotenv is only needed for local dev — in Docker, env vars are injected by docker-compose
-try { require("dotenv/config"); } catch {}
+import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
 export default defineConfig({

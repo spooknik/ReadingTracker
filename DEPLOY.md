@@ -233,6 +233,8 @@ docker compose -f docker-compose.prod.yml up -d --build
 docker compose -f docker-compose.prod.yml exec app npx prisma migrate deploy
 ```
 
+For schema/feature upgrades (including reader+rip rollout), follow `MIGRATION.md` first.
+
 ### View logs
 
 ```bash

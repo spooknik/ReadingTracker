@@ -41,3 +41,13 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+# local rip output and platform artifacts
+/data/
+nul
+
+# tool rippers (track source, ignore generated artifacts)
+/tools/**/output/
+/tools/**/tmp-output/
+/tools/**/tmp-output-*/
+/tools/**/node_modules/

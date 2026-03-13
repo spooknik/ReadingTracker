@@ -37,3 +37,78 @@ export async function PATCH(request: NextRequest) {
     );
   }
 }
+
+export async function DELETE() {
+  const user = await getCurrentUser();
+  const enabled = process.env.ENABLE_READER === "1";
+
+  if (!enabled) {
+    return NextResponse.json(
+      { error: "Reader cleanup is disabled" },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const unsupportedSeriesIds = await prisma.series.findMany({
+      where: {
+        userSeries: {
+          some: {
+            userId: user.id,
+          },
+        },
+        rip: {
+          is: {
+            status: "UNSUPPORTED",
+          },
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    const seriesIds = unsupportedSeriesIds.map((series) => series.id);
+
+    const removedReaderProgress =
+      seriesIds.length > 0
+        ? await prisma.readerProgress.deleteMany({
+            where: {
+              userId: user.id,
+              seriesId: {
+                in: seriesIds,
+              },
+            },
+          })
+        : { count: 0 };
+
+    const resetUnsupportedRips = await prisma.seriesRip.updateMany({
+      where: {
+        series: {
+          userSeries: {
+            some: {
+              userId: user.id,
+            },
+          },
+        },
+        status: "UNSUPPORTED",
+      },
+      data: {
+        normalizedUrl: null,
+        outputDir: null,
+        manifestPath: null,
+      },
+    });
+
+    return NextResponse.json({
+      removedReaderProgress: removedReaderProgress.count,
+      resetUnsupportedRips: resetUnsupportedRips.count,
+    });
+  } catch (error) {
+    console.error("Error cleaning unsupported reader data:", error);
+    return NextResponse.json(
+      { error: "Failed to cleanup unsupported reader data" },
+      { status: 500 },
+    );
+  }
+}

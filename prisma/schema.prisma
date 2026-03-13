@@ -23,6 +23,26 @@ enum ReadingStatus {
   PLAN_TO_READ
 }
 
+enum RipStatus {
+  UNSUPPORTED
+  PENDING
+  RUNNING
+  READY
+  FAILED
+}
+
+enum RipJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+enum RipJobKind {
+  SYNC
+  VERIFY
+}
+
 model User {
   id          String   @id @default(uuid())
   email       String   @unique
@@ -31,6 +51,7 @@ model User {
 
   createdSeries Series[]     @relation("CreatedBy")
   userSeries    UserSeries[]
+  readerProgress ReaderProgress[]
 
   @@map("users")
 }
@@ -48,8 +69,10 @@ model Series {
   createdById   String    @map("created_by_id")
   createdAt     DateTime  @default(now()) @map("created_at")
 
-  createdBy  User         @relation("CreatedBy", fields: [createdById], references: [id])
-  userSeries UserSeries[]
+  createdBy       User             @relation("CreatedBy", fields: [createdById], references: [id])
+  userSeries      UserSeries[]
+  rip             SeriesRip?
+  readerProgress  ReaderProgress[]
 
   @@map("series")
 }
@@ -70,4 +93,57 @@ model UserSeries {
 
   @@unique([userId, seriesId])
   @@map("user_series")
+}
+
+model SeriesRip {
+  id            String    @id @default(uuid())
+  seriesId      String    @unique @map("series_id")
+  site          String?
+  normalizedUrl String?   @map("normalized_url")
+  outputDir     String?   @map("output_dir")
+  manifestPath  String?   @map("manifest_path")
+  status        RipStatus @default(UNSUPPORTED)
+  lastError     String?   @map("last_error")
+  lastSyncedAt  DateTime? @map("last_synced_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  series Series   @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  jobs   RipJob[]
+
+  @@map("series_rips")
+}
+
+model RipJob {
+  id          String       @id @default(uuid())
+  seriesRipId String       @map("series_rip_id")
+  kind        RipJobKind   @default(SYNC)
+  status      RipJobStatus @default(QUEUED)
+  startedAt   DateTime?    @map("started_at")
+  finishedAt  DateTime?    @map("finished_at")
+  outputLog   String?      @map("output_log")
+  error       String?
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  seriesRip SeriesRip @relation(fields: [seriesRipId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@map("rip_jobs")
+}
+
+model ReaderProgress {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  seriesId    String   @map("series_id")
+  chapterSlug String?  @map("chapter_slug")
+  pageIndex   Int      @default(0) @map("page_index")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  series Series @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, seriesId])
+  @@map("reader_progress")
 }

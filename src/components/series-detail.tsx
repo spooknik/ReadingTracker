@@ -6,6 +6,8 @@ import Image from "next/image";
 import { StatusBadge, MediaTypeBadge } from "./badges";
 import type { ReadingStatus } from "@/generated/prisma/client";
 
+const READER_ENABLED = process.env.NEXT_PUBLIC_ENABLE_READER === "1";
+
 interface UserData {
   id: string;
   email: string;
@@ -35,6 +37,20 @@ interface SeriesData {
   link: string | null;
   createdBy: UserData;
   userSeries: UserSeriesData[];
+  rip?: {
+    status: string;
+    site: string | null;
+    lastError: string | null;
+    lastSyncedAt: string | Date | null;
+    jobs: Array<{
+      id: string;
+      status: string;
+      kind: string;
+      createdAt: string | Date;
+      finishedAt: string | Date | null;
+      error: string | null;
+    }>;
+  } | null;
 }
 
 const STATUSES = [
@@ -79,11 +95,50 @@ export function SeriesDetail({
   );
   const [editLink, setEditLink] = useState(series.link || "");
   const [editImageUrl, setEditImageUrl] = useState(series.imageUrl || "");
+  const [queueingRip, setQueueingRip] = useState(false);
 
   const currentUserSeries = series.userSeries.find(
     (us) => us.userId === currentUserId
   );
   const isTracking = !!currentUserSeries;
+  const canOpenReader = Boolean(READER_ENABLED && isTracking && series.rip?.status === "READY");
+  const canQueueRip = Boolean(
+    READER_ENABLED && series.link && (!series.rip || series.rip.status !== "UNSUPPORTED"),
+  );
+
+  function formatRipStatus(status: string) {
+    return status
+      .replace(/_/g, " ")
+      .toLowerCase()
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  async function handleQueueRipNow() {
+    setQueueingRip(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/series/${series.id}/rip`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "SYNC" }),
+      });
+
+      const data = await res.json().catch(() => {
+        return {};
+      });
+
+      if (!res.ok) {
+        setError(data.error || data.message || "Failed to queue rip sync");
+        return;
+      }
+
+      router.refresh();
+    } catch {
+      setError("Failed to queue rip sync");
+    } finally {
+      setQueueingRip(false);
+    }
+  }
 
   async function handleJoin() {
     setJoining(true);
@@ -224,6 +279,38 @@ export function SeriesDetail({
               </svg>
               Read online
             </a>
+          )}
+          {READER_ENABLED && series.link && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full border border-card-border px-2 py-1 text-[11px] text-muted">
+                Rip: {formatRipStatus(series.rip?.status || "UNSUPPORTED")}
+              </span>
+              {canOpenReader && (
+                <a
+                  href={`/series/${series.id}/reader`}
+                  className="rounded-full bg-primary px-2.5 py-1 text-[11px] font-medium text-white"
+                >
+                  Open Reader
+                </a>
+              )}
+              {canQueueRip && !canOpenReader && (
+                <button
+                  onClick={handleQueueRipNow}
+                  disabled={queueingRip}
+                  className="rounded-full border border-card-border px-2.5 py-1 text-[11px] font-medium transition-colors hover:bg-slate-50 disabled:opacity-50 dark:hover:bg-slate-800"
+                >
+                  {queueingRip ? "Queueing..." : "Queue Rip Sync"}
+                </button>
+              )}
+            </div>
+          )}
+          {READER_ENABLED && series.rip?.lastError && (
+            <p className="text-xs text-red-600 dark:text-red-400">Rip error: {series.rip.lastError}</p>
+          )}
+          {READER_ENABLED && series.rip?.lastSyncedAt && (
+            <p className="text-[11px] text-muted">
+              Last synced: {new Date(series.rip.lastSyncedAt).toLocaleString()}
+            </p>
           )}
           <div className="flex items-center gap-2">
             <p className="text-xs text-muted">

@@ -18,6 +18,14 @@ export default async function SeriesPage({ params }: SeriesPageProps) {
         include: { user: true },
       },
       createdBy: true,
+      rip: {
+        include: {
+          jobs: {
+            orderBy: { createdAt: "desc" },
+            take: 1,
+          },
+        },
+      },
     },
   });
 

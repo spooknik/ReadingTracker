@@ -20,9 +20,6 @@ export function SeriesCard({ series, allUsers, currentUserId }: SeriesCardProps)
     series.userSeries.map((us) => [us.userId, us])
   );
 
-  const currentUserProgress = userProgressMap.get(currentUserId);
-  const isTracking = !!currentUserProgress;
-
   return (
     <Link
       href={`/series/${series.id}`}

@@ -7,12 +7,21 @@ interface ProfileFormProps {
   currentName: string;
 }
 
+interface CleanupResponse {
+  removedReaderProgress: number;
+  resetUnsupportedRips: number;
+}
+
+const READER_ENABLED = process.env.NEXT_PUBLIC_ENABLE_READER === "1";
+
 export function ProfileForm({ currentName }: ProfileFormProps) {
   const router = useRouter();
   const [name, setName] = useState(currentName);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const [cleaning, setCleaning] = useState(false);
+  const [cleanupResult, setCleanupResult] = useState<CleanupResponse | null>(null);
 
   const hasChanges = name.trim() !== currentName;
 
@@ -45,6 +54,37 @@ export function ProfileForm({ currentName }: ProfileFormProps) {
     }
   }
 
+  async function handleCleanupUnsupportedReaderData() {
+    setCleaning(true);
+    setError("");
+    setCleanupResult(null);
+
+    try {
+      const res = await fetch("/api/profile", {
+        method: "DELETE",
+      });
+
+      const data = await res.json().catch(() => {
+        return {};
+      });
+
+      if (!res.ok) {
+        setError(data.error || "Failed to cleanup reader data");
+        return;
+      }
+
+      setCleanupResult({
+        removedReaderProgress: data.removedReaderProgress || 0,
+        resetUnsupportedRips: data.resetUnsupportedRips || 0,
+      });
+      router.refresh();
+    } catch {
+      setError("Failed to cleanup reader data");
+    } finally {
+      setCleaning(false);
+    }
+  }
+
   return (
     <div className="space-y-3">
       <div>
@@ -71,6 +111,27 @@ export function ProfileForm({ currentName }: ProfileFormProps) {
       >
         {saving ? "Saving..." : saved ? "Saved!" : "Save"}
       </button>
+
+      {READER_ENABLED && (
+        <div className="space-y-1 rounded-lg border border-card-border p-3">
+          <p className="text-xs text-muted">
+            If supported links were removed or changed, you can clear stale reader state for unsupported entries.
+          </p>
+          <button
+            type="button"
+            onClick={handleCleanupUnsupportedReaderData}
+            disabled={cleaning}
+            className="rounded-lg border border-card-border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-slate-50 disabled:opacity-50 dark:hover:bg-slate-800"
+          >
+            {cleaning ? "Cleaning..." : "Cleanup Unsupported Reader Data"}
+          </button>
+          {cleanupResult && (
+            <p className="text-xs text-muted">
+              Removed {cleanupResult.removedReaderProgress} reader progress rows and reset {cleanupResult.resetUnsupportedRips} unsupported rip records.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -13,7 +13,13 @@ services:
       DATABASE_URL: "postgresql://readingtracker:${DB_PASSWORD}@db:5432/readingtracker?schema=public"
       MAL_CLIENT_ID: "${MAL_CLIENT_ID}"
       DEFAULT_USER_EMAIL: "${DEFAULT_USER_EMAIL}"
+      ENABLE_READER: "${ENABLE_READER:-0}"
+      NEXT_PUBLIC_ENABLE_READER: "${NEXT_PUBLIC_ENABLE_READER:-0}"
+      ENABLE_AUTO_RIP: "${ENABLE_AUTO_RIP:-0}"
+      RIP_WORKER_SECRET: "${RIP_WORKER_SECRET:-}"
       NODE_ENV: production
+    volumes:
+      - rips:/app/data/rips
     depends_on:
       db:
         condition: service_healthy
@@ -40,3 +46,4 @@ services:
 
 volumes:
   pgdata:
+  rips:

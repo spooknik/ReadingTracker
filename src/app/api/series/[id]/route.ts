@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
+import { getSeriesRipPaths, resolveRipperSite } from "@/lib/ripper-sites";
+import { enqueueRipJob } from "@/lib/rip-queue";
+import { isAutoRipEnabled, isReaderEnabled } from "@/lib/reader-flags";
 
 // Join a series (create user_series entry)
 export async function POST(
@@ -122,6 +125,13 @@ export async function DELETE(
 
       await prisma.userSeries.delete({ where: { id: userSeries.id } });
 
+      await prisma.readerProgress.deleteMany({
+        where: {
+          userId: user.id,
+          seriesId: id,
+        },
+      });
+
       return NextResponse.json({ success: true });
     }
 
@@ -149,10 +159,12 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  await getCurrentUser(); // Ensure authenticated
+  await getCurrentUser();
   const body = await request.json();
 
   const { title, synopsis, imageUrl, mediaType, totalChapters, link } = body;
+  const normalizedLink = typeof link === "string" ? link.trim() : "";
+  const linkValue = normalizedLink.length > 0 ? normalizedLink : null;
 
   if (title !== undefined && !title.trim()) {
     return NextResponse.json({ error: "Title cannot be empty" }, { status: 400 });
@@ -165,12 +177,71 @@ export async function PUT(
     if (imageUrl !== undefined) updateData.imageUrl = imageUrl || null;
     if (mediaType !== undefined) updateData.mediaType = mediaType;
     if (totalChapters !== undefined) updateData.totalChapters = totalChapters || null;
-    if (link !== undefined) updateData.link = link || null;
+    if (link !== undefined) updateData.link = linkValue;
 
     const series = await prisma.series.update({
       where: { id },
       data: updateData,
     });
+
+    if (link !== undefined && isReaderEnabled()) {
+      const trackingCount = await prisma.userSeries.count({
+        where: { seriesId: id },
+      });
+
+      if (trackingCount > 0) {
+        const resolvedRipperSite = resolveRipperSite(linkValue);
+
+        if (resolvedRipperSite) {
+          const ripPaths = getSeriesRipPaths(resolvedRipperSite);
+
+          const seriesRip = await prisma.seriesRip.upsert({
+            where: { seriesId: id },
+            create: {
+              seriesId: id,
+              site: resolvedRipperSite.site,
+              normalizedUrl: resolvedRipperSite.normalizedSeriesUrl,
+              outputDir: ripPaths.outputDir,
+              manifestPath: ripPaths.manifestPath,
+              status: "PENDING",
+            },
+            update: {
+              site: resolvedRipperSite.site,
+              normalizedUrl: resolvedRipperSite.normalizedSeriesUrl,
+              outputDir: ripPaths.outputDir,
+              manifestPath: ripPaths.manifestPath,
+              status: "PENDING",
+              lastError: null,
+            },
+          });
+
+          if (isAutoRipEnabled()) {
+            await enqueueRipJob(seriesRip.id, "SYNC");
+          }
+        } else {
+          await prisma.seriesRip.upsert({
+            where: { seriesId: id },
+            create: {
+              seriesId: id,
+              status: "UNSUPPORTED",
+              site: null,
+              normalizedUrl: null,
+              outputDir: null,
+              manifestPath: null,
+              lastError: "Series link is unsupported for ripping",
+            },
+            update: {
+              status: "UNSUPPORTED",
+              site: null,
+              normalizedUrl: null,
+              outputDir: null,
+              manifestPath: null,
+              lastError: "Series link is unsupported for ripping",
+            },
+          });
+        }
+      }
+    }
 
     return NextResponse.json({ series });
   } catch (error) {

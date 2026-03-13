@@ -28,6 +28,20 @@ export async function GET() {
       createdBy: {
         select: { email: true, displayName: true },
       },
+      rip: {
+        include: {
+          jobs: {
+            orderBy: { createdAt: "asc" },
+          },
+        },
+      },
+      readerProgress: {
+        include: {
+          user: {
+            select: { email: true, displayName: true },
+          },
+        },
+      },
     },
     orderBy: { createdAt: "asc" },
   });
@@ -60,6 +74,36 @@ export async function GET() {
         notes: us.notes,
         joinedAt: us.joinedAt,
         updatedAt: us.updatedAt,
+      })),
+      rip: s.rip
+        ? {
+            site: s.rip.site,
+            normalizedUrl: s.rip.normalizedUrl,
+            outputDir: s.rip.outputDir,
+            manifestPath: s.rip.manifestPath,
+            status: s.rip.status,
+            lastError: s.rip.lastError,
+            lastSyncedAt: s.rip.lastSyncedAt,
+            createdAt: s.rip.createdAt,
+            updatedAt: s.rip.updatedAt,
+            jobs: s.rip.jobs.map((job) => ({
+              kind: job.kind,
+              status: job.status,
+              startedAt: job.startedAt,
+              finishedAt: job.finishedAt,
+              error: job.error,
+              createdAt: job.createdAt,
+              updatedAt: job.updatedAt,
+            })),
+          }
+        : null,
+      readerProgress: s.readerProgress.map((progress) => ({
+        userEmail: progress.user.email,
+        userName: progress.user.displayName,
+        chapterSlug: progress.chapterSlug,
+        pageIndex: progress.pageIndex,
+        createdAt: progress.createdAt,
+        updatedAt: progress.updatedAt,
       })),
     })),
   };
