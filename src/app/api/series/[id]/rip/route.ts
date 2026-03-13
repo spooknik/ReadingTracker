@@ -54,16 +54,48 @@ export async function GET(
 
   if (series.rip) {
     const progress = await getManifestProgress(series.rip.manifestPath);
+    const hasActiveJob = series.rip.jobs.some((job) => {
+      return job.status === "QUEUED" || job.status === "RUNNING";
+    });
+
+    let status = series.rip.status;
+    let lastError = series.rip.lastError;
+    let lastSyncedAt = series.rip.lastSyncedAt;
+
+    if (
+      progress &&
+      progress.completedChapters > 0 &&
+      !hasActiveJob &&
+      status !== "READY" &&
+      status !== "UNSUPPORTED"
+    ) {
+      status = "READY";
+      lastError = null;
+      lastSyncedAt = lastSyncedAt || new Date();
+
+      try {
+        await prisma.seriesRip.update({
+          where: { id: series.rip.id },
+          data: {
+            status: "READY",
+            lastError: null,
+            lastSyncedAt,
+          },
+        });
+      } catch {
+        // Silently fail
+      }
+    }
 
     return NextResponse.json({
-      supported: series.rip.status !== "UNSUPPORTED",
-      status: series.rip.status,
+      supported: status !== "UNSUPPORTED",
+      status,
       site: series.rip.site,
       normalizedUrl: series.rip.normalizedUrl,
       outputDir: series.rip.outputDir,
       manifestPath: series.rip.manifestPath,
-      lastError: series.rip.lastError,
-      lastSyncedAt: series.rip.lastSyncedAt,
+      lastError,
+      lastSyncedAt,
       progress,
       jobs: series.rip.jobs.map((job) => {
         return {

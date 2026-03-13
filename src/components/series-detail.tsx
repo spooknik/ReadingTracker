@@ -137,7 +137,12 @@ export function SeriesDetail({
   const latestJobStatus = ripInfo?.jobs[0]?.status || series.rip?.jobs[0]?.status || null;
   const hasActiveRipJob = latestJobStatus === "QUEUED" || latestJobStatus === "RUNNING";
   const isRipBusy = currentRipStatus === "RUNNING" || hasActiveRipJob;
-  const canOpenReader = Boolean(READER_ENABLED && isTracking && currentRipStatus === "READY");
+  const hasReadableRipContent = Boolean(
+    ripProgress && ripProgress.completedChapters > 0,
+  );
+  const canOpenReader = Boolean(
+    READER_ENABLED && isTracking && (currentRipStatus === "READY" || hasReadableRipContent),
+  );
   const canQueueRip = Boolean(READER_ENABLED && series.link && ripSupported);
 
   const loadRipStatus = useCallback(async () => {
