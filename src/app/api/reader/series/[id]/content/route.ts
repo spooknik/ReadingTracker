@@ -101,6 +101,43 @@ function buildReaderResponse(
   };
 }
 
+function resolvePreferredChapterSlug(
+  manifest: Awaited<ReturnType<typeof loadReaderManifest>>,
+  queryChapterSlug: string | null,
+  progressChapterSlug: string | null,
+  currentChapter: number,
+): string {
+  if (queryChapterSlug) {
+    return queryChapterSlug;
+  }
+
+  const fromCurrentChapter = findBestChapterSlugForProgress(manifest.chapters, currentChapter);
+  if (!progressChapterSlug) {
+    return fromCurrentChapter;
+  }
+
+  const progressIndex = findChapterIndexBySlug(manifest.chapters, progressChapterSlug);
+  if (progressIndex < 0) {
+    return fromCurrentChapter;
+  }
+
+  const fromCurrentIndex = findChapterIndexBySlug(manifest.chapters, fromCurrentChapter);
+  if (fromCurrentIndex < 0) {
+    return progressChapterSlug;
+  }
+
+  const progressChapter = manifest.chapters[progressIndex];
+  const currentChapterTarget = manifest.chapters[fromCurrentIndex];
+
+  if (progressChapter.chapterNumber !== null && currentChapterTarget.chapterNumber !== null) {
+    return progressChapter.chapterNumber >= currentChapterTarget.chapterNumber
+      ? progressChapterSlug
+      : fromCurrentChapter;
+  }
+
+  return progressIndex >= fromCurrentIndex ? progressChapterSlug : fromCurrentChapter;
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -185,19 +222,25 @@ export async function GET(
   const progress = series.readerProgress[0] || null;
   const userSeries = series.userSeries[0];
 
-  const preferredChapter =
-    (typeof chapterParam === "string" && chapterParam.trim().length > 0
-      ? chapterParam.trim()
-      : null) ||
-    progress?.chapterSlug ||
-    findBestChapterSlugForProgress(manifest.chapters, userSeries.currentChapter);
+  const chapterFromQuery =
+    typeof chapterParam === "string" && chapterParam.trim().length > 0 ? chapterParam.trim() : null;
+
+  const preferredChapter = resolvePreferredChapterSlug(
+    manifest,
+    chapterFromQuery,
+    progress?.chapterSlug || null,
+    userSeries.currentChapter,
+  );
 
   const preferredPageFromQuery =
     pageParam !== null ? Number.parseInt(pageParam, 10) : Number.NaN;
+  const shouldUseSavedPage = progress?.chapterSlug !== null && progress?.chapterSlug === preferredChapter;
   const preferredPage =
     Number.isInteger(preferredPageFromQuery) && preferredPageFromQuery >= 0
       ? preferredPageFromQuery
-      : progress?.pageIndex ?? 0;
+      : shouldUseSavedPage
+        ? progress?.pageIndex ?? 0
+        : 0;
 
   const chapterExists = findChapterIndexBySlug(manifest.chapters, preferredChapter);
   const activeChapterSlug = chapterExists >= 0 ? preferredChapter : manifest.chapters[0].slug;
