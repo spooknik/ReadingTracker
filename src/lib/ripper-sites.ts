@@ -20,6 +20,50 @@ interface RipperSiteRuntimeInfo {
   ripperScriptPath: string;
 }
 
+function isWeebcentralHost(hostname: string): boolean {
+  return hostname === "weebcentral.com" || hostname === "www.weebcentral.com";
+}
+
+function isManhwadenHost(hostname: string): boolean {
+  return hostname === "manhwaden.com" || hostname === "www.manhwaden.com";
+}
+
+function isDynastyHost(hostname: string): boolean {
+  return hostname === "dynasty-scans.com" || hostname === "www.dynasty-scans.com";
+}
+
+function isTapasHost(hostname: string): boolean {
+  return hostname === "tapas.io" || hostname === "www.tapas.io" || hostname === "m.tapas.io";
+}
+
+function isMangabuddyHost(hostname: string): boolean {
+  return hostname === "mangabuddy.com" || hostname === "www.mangabuddy.com" || hostname === "m.mangabuddy.com";
+}
+
+function getSeriesUrlHintForSupportedHost(hostname: string): string | null {
+  if (isWeebcentralHost(hostname)) {
+    return "WeebCentral link must be a series URL like https://weebcentral.com/series/<series-id>/<series-slug>";
+  }
+
+  if (isManhwadenHost(hostname)) {
+    return "ManhwaDen link must be a series URL like https://www.manhwaden.com/manga/<series-slug>/";
+  }
+
+  if (isDynastyHost(hostname)) {
+    return "Dynasty link must be a series URL like https://dynasty-scans.com/series/<series-slug>";
+  }
+
+  if (isTapasHost(hostname)) {
+    return "Tapas link must be a series URL like https://tapas.io/series/<series-slug>/info";
+  }
+
+  if (isMangabuddyHost(hostname)) {
+    return "MangaBuddy link must be a series URL like https://mangabuddy.com/<series-slug>";
+  }
+
+  return null;
+}
+
 const MANGABUDDY_RESERVED_PREFIXES = new Set([
   "home",
   "latest",
@@ -46,7 +90,7 @@ const RIPPER_SITES: RipperSiteDefinition[] = [
     site: "manhwaden",
     ripperPath: "tools/manhwaden-ripper/ripper.mjs",
     normalizeSeriesUrl: (url) => {
-      if (url.hostname !== "manhwaden.com" && url.hostname !== "www.manhwaden.com") {
+      if (!isManhwadenHost(url.hostname)) {
         return null;
       }
 
@@ -67,7 +111,7 @@ const RIPPER_SITES: RipperSiteDefinition[] = [
     site: "dynasty-scans",
     ripperPath: "tools/dynasty-ripper/ripper.mjs",
     normalizeSeriesUrl: (url) => {
-      if (url.hostname !== "dynasty-scans.com" && url.hostname !== "www.dynasty-scans.com") {
+      if (!isDynastyHost(url.hostname)) {
         return null;
       }
 
@@ -88,11 +132,7 @@ const RIPPER_SITES: RipperSiteDefinition[] = [
     site: "tapas",
     ripperPath: "tools/tapas-ripper/ripper.mjs",
     normalizeSeriesUrl: (url) => {
-      if (
-        url.hostname !== "tapas.io" &&
-        url.hostname !== "www.tapas.io" &&
-        url.hostname !== "m.tapas.io"
-      ) {
+      if (!isTapasHost(url.hostname)) {
         return null;
       }
 
@@ -113,11 +153,7 @@ const RIPPER_SITES: RipperSiteDefinition[] = [
     site: "mangabuddy",
     ripperPath: "tools/mangabuddy-ripper/ripper.mjs",
     normalizeSeriesUrl: (url) => {
-      if (
-        url.hostname !== "mangabuddy.com" &&
-        url.hostname !== "www.mangabuddy.com" &&
-        url.hostname !== "m.mangabuddy.com"
-      ) {
+      if (!isMangabuddyHost(url.hostname)) {
         return null;
       }
 
@@ -150,7 +186,7 @@ const RIPPER_SITES: RipperSiteDefinition[] = [
     site: "weebcentral",
     ripperPath: "tools/weebcentral-ripper/ripper.mjs",
     normalizeSeriesUrl: (url) => {
-      if (url.hostname !== "weebcentral.com" && url.hostname !== "www.weebcentral.com") {
+      if (!isWeebcentralHost(url.hostname)) {
         return null;
       }
 
@@ -226,6 +262,29 @@ export function resolveRipperSite(rawUrl: string | null | undefined): ResolvedRi
   }
 
   return null;
+}
+
+export function getRipperLinkError(rawUrl: string | null | undefined): string | null {
+  const normalizedUrl = typeof rawUrl === "string" ? rawUrl.trim() : "";
+  if (!normalizedUrl) {
+    return "Series link is missing";
+  }
+
+  if (!isHttpUrl(normalizedUrl)) {
+    return "Series link must be a valid http(s) URL";
+  }
+
+  if (resolveRipperSite(normalizedUrl)) {
+    return null;
+  }
+
+  const parsed = new URL(normalizedUrl);
+  const hostHint = getSeriesUrlHintForSupportedHost(parsed.hostname);
+  if (hostHint) {
+    return hostHint;
+  }
+
+  return "Series link is unsupported for ripping";
 }
 
 export function getSeriesRipPaths(resolvedSite: ResolvedRipperSite): {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { getSeriesRipPaths, resolveRipperSite } from "@/lib/ripper-sites";
+import { getRipperLinkError, getSeriesRipPaths, resolveRipperSite } from "@/lib/ripper-sites";
 import { enqueueRipJob } from "@/lib/rip-queue";
 import { isAutoRipEnabled, isReaderEnabled } from "@/lib/reader-flags";
 
@@ -219,6 +219,8 @@ export async function PUT(
             await enqueueRipJob(seriesRip.id, "SYNC");
           }
         } else {
+          const unsupportedReason = getRipperLinkError(linkValue) || "Series link is unsupported for ripping";
+
           await prisma.seriesRip.upsert({
             where: { seriesId: id },
             create: {
@@ -228,7 +230,7 @@ export async function PUT(
               normalizedUrl: null,
               outputDir: null,
               manifestPath: null,
-              lastError: "Series link is unsupported for ripping",
+              lastError: unsupportedReason,
             },
             update: {
               status: "UNSUPPORTED",
@@ -236,7 +238,7 @@ export async function PUT(
               normalizedUrl: null,
               outputDir: null,
               manifestPath: null,
-              lastError: "Series link is unsupported for ripping",
+              lastError: unsupportedReason,
             },
           });
         }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { getSeriesRipPaths, resolveRipperSite } from "@/lib/ripper-sites";
+import { getRipperLinkError, getSeriesRipPaths, resolveRipperSite } from "@/lib/ripper-sites";
 import { enqueueRipJob, triggerRipQueueProcessing } from "@/lib/rip-queue";
 import { isReaderEnabled } from "@/lib/reader-flags";
 import { loadRipManifestProgress } from "@/lib/reader-manifest";
@@ -114,6 +114,8 @@ export async function GET(
   const resolved = resolveRipperSite(series.link || "");
 
   if (!resolved) {
+    const unsupportedReason = getRipperLinkError(series.link || "");
+
     return NextResponse.json({
       supported: false,
       status: "UNSUPPORTED",
@@ -121,7 +123,7 @@ export async function GET(
       normalizedUrl: null,
       outputDir: null,
       manifestPath: null,
-      lastError: null,
+      lastError: unsupportedReason,
       lastSyncedAt: null,
       progress: null,
       jobs: [],
@@ -170,8 +172,10 @@ export async function POST(
 
   const resolved = resolveRipperSite(series.link || "");
   if (!resolved) {
+    const unsupportedReason = getRipperLinkError(series.link || "") || "Series link is not supported for ripping";
+
     return NextResponse.json(
-      { error: "Series link is not supported for ripping" },
+      { error: unsupportedReason },
       { status: 400 },
     );
   }
