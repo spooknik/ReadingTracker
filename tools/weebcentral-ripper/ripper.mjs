@@ -220,6 +220,16 @@ function extractSeriesSlug(seriesUrl) {
   return parts[2] || null;
 }
 
+function buildSeriesFullChapterListUrl(seriesUrl) {
+  const seriesId = extractSeriesId(seriesUrl);
+  if (!seriesId) {
+    return null;
+  }
+
+  const url = new URL(seriesUrl);
+  return `${url.origin}/series/${seriesId}/full-chapter-list`;
+}
+
 function sanitizePathSegment(value) {
   return value.replace(/[<>:"/\\|?*\x00-\x1f]/g, "_").trim();
 }
@@ -489,6 +499,67 @@ function extractChaptersFromSeriesHtml(seriesHtml, seriesUrl) {
   return chapters;
 }
 
+function isFallbackChapterTitle(title, slug) {
+  if (!title || !slug) {
+    return true;
+  }
+
+  return normalizeWhitespace(title).toLowerCase() === normalizeWhitespace(slug).toLowerCase();
+}
+
+function mergeDiscoveredChapterSources(chapterGroups) {
+  const mergedBySlug = new Map();
+
+  for (const chapters of chapterGroups) {
+    if (!Array.isArray(chapters)) {
+      continue;
+    }
+
+    for (const chapter of chapters) {
+      if (!chapter?.slug) {
+        continue;
+      }
+
+      const existing = mergedBySlug.get(chapter.slug);
+      if (!existing) {
+        mergedBySlug.set(chapter.slug, { ...chapter });
+        continue;
+      }
+
+      const merged = {
+        ...existing,
+      };
+
+      if (!Number.isFinite(merged.chapterOrder) && Number.isFinite(chapter.chapterOrder)) {
+        merged.chapterOrder = chapter.chapterOrder;
+      }
+
+      if (
+        (!merged.title || isFallbackChapterTitle(merged.title, merged.slug)) &&
+        chapter.title
+      ) {
+        merged.title = chapter.title;
+      }
+
+      if (!merged.url && chapter.url) {
+        merged.url = chapter.url;
+      }
+
+      if (!merged.releaseDate && chapter.releaseDate) {
+        merged.releaseDate = chapter.releaseDate;
+      }
+
+      if (!merged.releaseDateText && chapter.releaseDateText) {
+        merged.releaseDateText = chapter.releaseDateText;
+      }
+
+      mergedBySlug.set(chapter.slug, merged);
+    }
+  }
+
+  return [...mergedBySlug.values()];
+}
+
 function sortChaptersOldestFirst(chapters) {
   if (chapters.length < 2) {
     return chapters;
@@ -569,7 +640,17 @@ function extractImagesEndpointFromChapterHtml(chapterHtml, chapterUrl) {
     return regexMatch[1];
   }
 
-  return null;
+  return buildDefaultImagesEndpointFromChapterUrl(chapterUrl);
+}
+
+function buildDefaultImagesEndpointFromChapterUrl(chapterUrl) {
+  const chapterId = extractChapterIdFromUrl(chapterUrl);
+  if (!chapterId) {
+    return null;
+  }
+
+  const parsed = new URL(chapterUrl);
+  return `${parsed.origin}/chapters/${chapterId}/images`;
 }
 
 function buildImagesEndpointUrl(rawEndpointUrl) {
@@ -869,7 +950,7 @@ function mergeDiscoveredChapters(manifest, discoveredChapters) {
   return merged;
 }
 
-async function discoverSeries(client, targetSeriesUrl) {
+async function discoverSeries(client, targetSeriesUrl, options) {
   const normalizedSeriesUrl = normalizeSeriesUrl(targetSeriesUrl);
   const seriesId = extractSeriesId(normalizedSeriesUrl);
   const seriesSlug = extractSeriesSlug(normalizedSeriesUrl);
@@ -880,7 +961,39 @@ async function discoverSeries(client, targetSeriesUrl) {
 
   const fallbackTitle = seriesSlug || seriesId;
   const seriesTitle = extractSeriesTitle(seriesHtml, fallbackTitle);
-  const discoveredChapters = extractChaptersFromSeriesHtml(seriesHtml, normalizedSeriesUrl);
+  const seriesPageChapters = extractChaptersFromSeriesHtml(seriesHtml, normalizedSeriesUrl);
+
+  let fullChapterListChapters = [];
+  const fullChapterListUrl = buildSeriesFullChapterListUrl(normalizedSeriesUrl);
+  if (fullChapterListUrl) {
+    try {
+      const fullChapterListHtml = await client.fetchText(fullChapterListUrl, {
+        referer: normalizedSeriesUrl,
+        headers: {
+          "X-Requested-With": "XMLHttpRequest",
+        },
+      });
+
+      fullChapterListChapters = extractChaptersFromSeriesHtml(fullChapterListHtml, normalizedSeriesUrl);
+    } catch (error) {
+      if (options.verbose) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`Could not fetch full chapter list: ${message}`);
+      }
+    }
+  }
+
+  const discoveredChapters = mergeDiscoveredChapterSources([
+    seriesPageChapters,
+    fullChapterListChapters,
+  ]);
+
+  if (options.verbose) {
+    console.log(
+      `Chapter discovery: series page=${seriesPageChapters.length}, full list=${fullChapterListChapters.length}, merged=${discoveredChapters.length}.`,
+    );
+  }
+
   if (discoveredChapters.length === 0) {
     throw new Error("No chapters found. The site may have changed markup.");
   }
@@ -1142,7 +1255,7 @@ function getManifestProgressStats(chapters) {
 }
 
 async function runDiscover(client, target, options) {
-  const discovery = await discoverSeries(client, target);
+  const discovery = await discoverSeries(client, target, options);
   const paths = getSeriesPaths(options, discovery.seriesId);
   const defaults = buildDefaultManifest(
     discovery.seriesUrl,
@@ -1179,7 +1292,7 @@ async function runDiscover(client, target, options) {
 }
 
 async function runDownloadOrUpdate(client, target, options) {
-  const discovery = await discoverSeries(client, target);
+  const discovery = await discoverSeries(client, target, options);
   const paths = getSeriesPaths(options, discovery.seriesId);
   const defaults = buildDefaultManifest(
     discovery.seriesUrl,
