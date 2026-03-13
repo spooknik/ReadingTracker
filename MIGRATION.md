@@ -71,6 +71,10 @@ NEXT_PUBLIC_ENABLE_READER=1
 # Start with manual queueing first (recommended)
 ENABLE_AUTO_RIP=0
 
+# Needed for local health checks / local worker curl calls that do not pass
+# through Cloudflare Access headers
+DEFAULT_USER_EMAIL=automation@localhost
+
 # Required in production for /api/rip/worker
 RIP_WORKER_SECRET=<generate-a-long-random-secret>
 
@@ -90,6 +94,9 @@ openssl rand -hex 32
 docker compose -f docker-compose.prod.yml up -d --build
 docker compose -f docker-compose.prod.yml ps
 ```
+
+Important: `NEXT_PUBLIC_ENABLE_READER` is a build-time frontend flag. Always use
+`--build` after changing it.
 
 ## 5) Apply/Verify Prisma Migration
 
@@ -129,10 +136,17 @@ You can process queue jobs by calling the worker endpoint from the VM.
 Manual test call:
 
 ```bash
+# Use the literal secret from .env if RIP_WORKER_SECRET is not exported in your shell
 curl -sS -X POST http://localhost:3000/api/rip/worker \
   -H "Content-Type: application/json" \
   -H "x-worker-secret: $RIP_WORKER_SECRET" \
   -d '{"maxJobs":1}'
+```
+
+If `DEFAULT_USER_EMAIL` is intentionally unset, add this header for local testing:
+
+```bash
+-H "cf-access-authenticated-user-email: worker@localhost"
 ```
 
 Optional cron (every minute):
@@ -155,6 +169,14 @@ Add:
 4. Confirm rip status progresses (`PENDING`/`RUNNING` to `READY`).
 5. Click `Open Reader` and verify images load.
 6. Scroll and refresh; confirm progress persists.
+
+If reader UI still does not appear:
+
+```bash
+docker compose -f docker-compose.prod.yml exec app sh -lc 'echo "ENABLE_READER=$ENABLE_READER NEXT_PUBLIC_ENABLE_READER=$NEXT_PUBLIC_ENABLE_READER"'
+```
+
+Both should print `1`.
 
 ## 10) Rollback Plan
 

@@ -6,6 +6,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_ENABLE_READER: "${NEXT_PUBLIC_ENABLE_READER:-0}"
     restart: unless-stopped
     ports:
       - "3000:3000"

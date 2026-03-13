@@ -10,6 +10,8 @@ RUN npm ci --ignore-scripts
 # Build the application
 FROM base AS builder
 WORKDIR /app
+ARG NEXT_PUBLIC_ENABLE_READER=0
+ENV NEXT_PUBLIC_ENABLE_READER=${NEXT_PUBLIC_ENABLE_READER}
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 

@@ -51,3 +51,4 @@ nul
 /tools/**/tmp-output/
 /tools/**/tmp-output-*/
 /tools/**/node_modules/
+MIGRATION.md
