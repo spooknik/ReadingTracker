@@ -32,6 +32,8 @@ interface RawManifest {
   chapters?: unknown;
 }
 
+const THUMBNAIL_MAX_DIMENSION = 220;
+
 export interface ReaderManifestImage {
   index: number;
   file: string;
@@ -89,6 +91,83 @@ function asNumber(value: unknown): number | null {
   }
 
   return null;
+}
+
+function parseImageDimension(value: string): number | null {
+  const match = value.trim().match(/^(\d{1,5})(?:px)?$/i);
+  if (!match) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(match[1], 10);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function isLikelyPlaceholderImageUrl(imageUrl: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(imageUrl);
+  } catch {
+    return false;
+  }
+
+  const pathname = parsed.pathname.toLowerCase();
+  return (
+    pathname.includes("/wp-content/themes/") &&
+    /(?:^|\/)(?:dflazy|placeholder|spacer)\.(?:jpg|jpeg|png|webp|gif|avif)$/.test(pathname)
+  );
+}
+
+function isLikelyThumbnailVariantUrl(imageUrl: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(imageUrl);
+  } catch {
+    return false;
+  }
+
+  const pathname = parsed.pathname.toLowerCase();
+  if (!pathname.includes("/wp-content/uploads/")) {
+    return false;
+  }
+
+  const fileName = pathname.split("/").pop() || "";
+  const fileNameSizeMatch = fileName.match(/-(\d{2,4})x(\d{2,4})(?=\.[a-z0-9]+$)/i);
+  if (fileNameSizeMatch) {
+    const width = Number.parseInt(fileNameSizeMatch[1], 10);
+    const height = Number.parseInt(fileNameSizeMatch[2], 10);
+    if (
+      Number.isInteger(width) &&
+      Number.isInteger(height) &&
+      width <= THUMBNAIL_MAX_DIMENSION &&
+      height <= THUMBNAIL_MAX_DIMENSION
+    ) {
+      return true;
+    }
+  }
+
+  const queryWidthRaw = parsed.searchParams.get("w");
+  const queryHeightRaw = parsed.searchParams.get("h");
+  if (!queryWidthRaw || !queryHeightRaw) {
+    return false;
+  }
+
+  const queryWidth = parseImageDimension(queryWidthRaw);
+  const queryHeight = parseImageDimension(queryHeightRaw);
+  return (
+    queryWidth !== null &&
+    queryHeight !== null &&
+    queryWidth <= THUMBNAIL_MAX_DIMENSION &&
+    queryHeight <= THUMBNAIL_MAX_DIMENSION
+  );
+}
+
+function isLikelyNonChapterImageUrl(imageUrl: string): boolean {
+  return isLikelyPlaceholderImageUrl(imageUrl) || isLikelyThumbnailVariantUrl(imageUrl);
 }
 
 function parseChapterNumber(chapter: RawManifestChapter, index: number): number | null {
@@ -177,6 +256,11 @@ function normalizeManifestChapter(
         return null;
       }
 
+      const sourceUrl = asString(candidate.url);
+      if (sourceUrl && isLikelyNonChapterImageUrl(sourceUrl)) {
+        return null;
+      }
+
       const index = asNumber(candidate.index);
       const bytes = asNumber(candidate.bytes);
 
@@ -184,7 +268,7 @@ function normalizeManifestChapter(
         index: index !== null ? Math.max(1, Math.floor(index)) : imageIndex + 1,
         file,
         bytes: bytes !== null ? Math.max(0, Math.floor(bytes)) : null,
-        url: asString(candidate.url),
+        url: sourceUrl,
       };
     })
     .filter((image): image is ReaderManifestImage => image !== null)

@@ -24,6 +24,7 @@ const VALID_IMAGE_EXTENSIONS = new Set([
   ".gif",
   ".avif",
 ]);
+const THUMBNAIL_MAX_DIMENSION = 220;
 
 const DEFAULT_OPTIONS = {
   outputDir: path.resolve(process.cwd(), "tools/manhwaden-ripper/output"),
@@ -524,6 +525,92 @@ function isLikelyImageUrl(url) {
   );
 }
 
+function parseImageDimension(value) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const match = value.trim().match(/^(\d{1,5})(?:px)?$/i);
+  if (!match) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(match[1], 10);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function isLikelyPlaceholderImageUrl(imageUrl) {
+  if (!isHttpUrl(imageUrl)) {
+    return false;
+  }
+
+  const parsed = new URL(imageUrl);
+  const pathname = parsed.pathname.toLowerCase();
+  return (
+    pathname.includes("/wp-content/themes/") &&
+    /(?:^|\/)(?:dflazy|placeholder|spacer)\.(?:jpg|jpeg|png|webp|gif|avif)$/.test(pathname)
+  );
+}
+
+function isLikelyThumbnailVariantUrl(imageUrl) {
+  if (!isHttpUrl(imageUrl)) {
+    return false;
+  }
+
+  const parsed = new URL(imageUrl);
+  const pathname = parsed.pathname.toLowerCase();
+  if (!pathname.includes("/wp-content/uploads/")) {
+    return false;
+  }
+
+  const fileName = pathname.split("/").pop() || "";
+  const fileNameSizeMatch = fileName.match(/-(\d{2,4})x(\d{2,4})(?=\.[a-z0-9]+$)/i);
+  if (fileNameSizeMatch) {
+    const width = Number.parseInt(fileNameSizeMatch[1], 10);
+    const height = Number.parseInt(fileNameSizeMatch[2], 10);
+    if (
+      Number.isInteger(width) &&
+      Number.isInteger(height) &&
+      width <= THUMBNAIL_MAX_DIMENSION &&
+      height <= THUMBNAIL_MAX_DIMENSION
+    ) {
+      return true;
+    }
+  }
+
+  const queryWidth = parseImageDimension(parsed.searchParams.get("w"));
+  const queryHeight = parseImageDimension(parsed.searchParams.get("h"));
+  if (
+    queryWidth !== null &&
+    queryHeight !== null &&
+    queryWidth <= THUMBNAIL_MAX_DIMENSION &&
+    queryHeight <= THUMBNAIL_MAX_DIMENSION
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function isLikelyNonChapterImage(imgTag, imageUrl) {
+  if (isLikelyPlaceholderImageUrl(imageUrl) || isLikelyThumbnailVariantUrl(imageUrl)) {
+    return true;
+  }
+
+  const width = parseImageDimension(extractAttribute(imgTag, "width"));
+  const height = parseImageDimension(extractAttribute(imgTag, "height"));
+  return (
+    width !== null &&
+    height !== null &&
+    width <= THUMBNAIL_MAX_DIMENSION &&
+    height <= THUMBNAIL_MAX_DIMENSION
+  );
+}
+
 function extractImageUrlsFromHtmlBlock(htmlBlock, baseUrl) {
   const imgTagRegex = /<img\b[^>]*>/gi;
   const urls = [];
@@ -551,6 +638,10 @@ function extractImageUrlsFromHtmlBlock(htmlBlock, baseUrl) {
       continue;
     }
 
+    if (isLikelyNonChapterImage(imgTag, absoluteUrl)) {
+      continue;
+    }
+
     if (seen.has(absoluteUrl)) {
       continue;
     }
@@ -563,8 +654,22 @@ function extractImageUrlsFromHtmlBlock(htmlBlock, baseUrl) {
 }
 
 function extractImageUrlsFromChapterHtml(chapterHtml, chapterUrl) {
-  const readingSection = extractDivByClass(chapterHtml, "reading-content") ?? chapterHtml;
-  return extractImageUrlsFromHtmlBlock(readingSection, chapterUrl);
+  const candidateBlocks = [
+    extractDivByClass(chapterHtml, "reading-content"),
+    extractDivByClass(chapterHtml, "read-container"),
+    extractDivByClass(chapterHtml, "text-left"),
+  ].filter((value) => {
+    return typeof value === "string" && value.length > 0;
+  });
+
+  for (const candidateBlock of candidateBlocks) {
+    const imageUrls = extractImageUrlsFromHtmlBlock(candidateBlock, chapterUrl);
+    if (imageUrls.length > 0) {
+      return imageUrls;
+    }
+  }
+
+  return [];
 }
 
 function extractImageUrlsFromKingofshojoHtml(html, pageUrl) {
@@ -1079,6 +1184,18 @@ async function downloadChapter({
 
   let imageUrls = extractImageUrlsFromChapterHtml(chapterHtml, chapter.url);
   let imageReferer = chapter.url;
+
+  if (imageUrls.length === 0) {
+    const fallback = await resolveKingofshojoFallbackImageUrls(client, chapter.url);
+    if (fallback && fallback.imageUrls.length > 0) {
+      imageUrls = fallback.imageUrls;
+      imageReferer = fallback.sourceUrl;
+
+      logger(
+        `  ${chapter.slug}: switched to fallback source ${fallback.sourceUrl} (${fallback.imageUrls.length} images)`,
+      );
+    }
+  }
 
   const legacyKingUrlCount = imageUrls.filter((imageUrl) => {
     return isLegacyKingofshojoMangaImageUrl(imageUrl);
