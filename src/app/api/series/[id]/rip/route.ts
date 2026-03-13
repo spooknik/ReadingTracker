@@ -52,15 +52,56 @@ export async function GET(
     return NextResponse.json({ error: "Series not found" }, { status: 404 });
   }
 
-  if (series.rip) {
-    const progress = await getManifestProgress(series.rip.manifestPath);
-    const hasActiveJob = series.rip.jobs.some((job) => {
+  let rip = series.rip;
+
+  if (rip && series.link) {
+    const resolved = resolveRipperSite(series.link);
+    const needsConfigRefresh = Boolean(
+      resolved && (
+        rip.status === "UNSUPPORTED" ||
+        rip.site !== resolved.site ||
+        rip.normalizedUrl !== resolved.normalizedSeriesUrl ||
+        !rip.outputDir ||
+        !rip.manifestPath
+      ),
+    );
+
+    if (needsConfigRefresh && resolved) {
+      const paths = getSeriesRipPaths(resolved);
+
+      try {
+        rip = await prisma.seriesRip.update({
+          where: { id: rip.id },
+          data: {
+            site: resolved.site,
+            normalizedUrl: resolved.normalizedSeriesUrl,
+            outputDir: paths.outputDir,
+            manifestPath: paths.manifestPath,
+            status: "PENDING",
+            lastError: null,
+          },
+          include: {
+            jobs: {
+              orderBy: { createdAt: "desc" },
+              take: 5,
+            },
+          },
+        });
+      } catch {
+        // Silently fail; we'll return existing status data below.
+      }
+    }
+  }
+
+  if (rip) {
+    const progress = await getManifestProgress(rip.manifestPath);
+    const hasActiveJob = rip.jobs.some((job) => {
       return job.status === "QUEUED" || job.status === "RUNNING";
     });
 
-    let status = series.rip.status;
-    let lastError = series.rip.lastError;
-    let lastSyncedAt = series.rip.lastSyncedAt;
+    let status = rip.status;
+    let lastError = rip.lastError;
+    let lastSyncedAt = rip.lastSyncedAt;
 
     if (
       progress &&
@@ -75,7 +116,7 @@ export async function GET(
 
       try {
         await prisma.seriesRip.update({
-          where: { id: series.rip.id },
+          where: { id: rip.id },
           data: {
             status: "READY",
             lastError: null,
@@ -90,14 +131,14 @@ export async function GET(
     return NextResponse.json({
       supported: status !== "UNSUPPORTED",
       status,
-      site: series.rip.site,
-      normalizedUrl: series.rip.normalizedUrl,
-      outputDir: series.rip.outputDir,
-      manifestPath: series.rip.manifestPath,
+      site: rip.site,
+      normalizedUrl: rip.normalizedUrl,
+      outputDir: rip.outputDir,
+      manifestPath: rip.manifestPath,
       lastError,
       lastSyncedAt,
       progress,
-      jobs: series.rip.jobs.map((job) => {
+      jobs: rip.jobs.map((job) => {
         return {
           id: job.id,
           kind: job.kind,
