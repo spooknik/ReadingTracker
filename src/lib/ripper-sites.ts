@@ -40,6 +40,10 @@ function isMangabuddyHost(hostname: string): boolean {
   return hostname === "mangabuddy.com" || hostname === "www.mangabuddy.com" || hostname === "m.mangabuddy.com";
 }
 
+function isMangadexHost(hostname: string): boolean {
+  return hostname === "mangadex.org" || hostname === "www.mangadex.org";
+}
+
 function getSeriesUrlHintForSupportedHost(hostname: string): string | null {
   if (isWeebcentralHost(hostname)) {
     return "WeebCentral link must be a series URL like https://weebcentral.com/series/<series-id>/<series-slug>";
@@ -59,6 +63,10 @@ function getSeriesUrlHintForSupportedHost(hostname: string): string | null {
 
   if (isMangabuddyHost(hostname)) {
     return "MangaBuddy link must be a series URL like https://mangabuddy.com/<series-slug>";
+  }
+
+  if (isMangadexHost(hostname)) {
+    return "MangaDex link must be a title URL like https://mangadex.org/title/<title-id>/<series-slug>";
   }
 
   return null;
@@ -84,6 +92,7 @@ const MANGABUDDY_RESERVED_PREFIXES = new Set([
   "dmca",
   "az-list",
 ]);
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const RIPPER_SITES: RipperSiteDefinition[] = [
   {
@@ -180,6 +189,35 @@ const RIPPER_SITES: RipperSiteDefinition[] = [
       const url = new URL(normalizedSeriesUrl);
       const parts = url.pathname.split("/").filter(Boolean);
       return parts[0];
+    },
+  },
+  {
+    site: "mangadex",
+    ripperPath: "tools/mangadex-ripper/ripper.mjs",
+    normalizeSeriesUrl: (url) => {
+      if (!isMangadexHost(url.hostname)) {
+        return null;
+      }
+
+      const pathParts = url.pathname.split("/").filter(Boolean);
+      if (pathParts.length < 2 || pathParts[0] !== "title") {
+        return null;
+      }
+
+      const titleId = pathParts[1];
+      if (!UUID_PATTERN.test(titleId)) {
+        return null;
+      }
+
+      const seriesSlug = pathParts[2];
+      return seriesSlug
+        ? `https://mangadex.org/title/${titleId}/${seriesSlug}`
+        : `https://mangadex.org/title/${titleId}`;
+    },
+    extractSeriesSlug: (normalizedSeriesUrl) => {
+      const url = new URL(normalizedSeriesUrl);
+      const parts = url.pathname.split("/").filter(Boolean);
+      return parts[1];
     },
   },
   {

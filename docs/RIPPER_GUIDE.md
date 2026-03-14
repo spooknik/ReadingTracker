@@ -60,6 +60,7 @@ Current site handlers live in `src/lib/ripper-sites.ts`.
 - Dynasty: `https://dynasty-scans.com/series/<series-slug>`
 - Tapas: `https://tapas.io/series/<series-slug>/info`
 - MangaBuddy: `https://mangabuddy.com/<series-slug>`
+- MangaDex: `https://mangadex.org/title/<title-id>/<series-slug>`
 - WeebCentral: `https://weebcentral.com/series/<series-id>/<series-slug>`
 
 Important: host-only URLs (for example `https://weebcentral.com/`) are not valid series

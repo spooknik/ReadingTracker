@@ -43,6 +43,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/tools/manhwaden-ripper ./tools/ma
 COPY --from=builder --chown=nextjs:nodejs /app/tools/dynasty-ripper ./tools/dynasty-ripper
 COPY --from=builder --chown=nextjs:nodejs /app/tools/tapas-ripper ./tools/tapas-ripper
 COPY --from=builder --chown=nextjs:nodejs /app/tools/mangabuddy-ripper ./tools/mangabuddy-ripper
+COPY --from=builder --chown=nextjs:nodejs /app/tools/mangadex-ripper ./tools/mangadex-ripper
 COPY --from=builder --chown=nextjs:nodejs /app/tools/weebcentral-ripper ./tools/weebcentral-ripper
 
 # Copy Prisma schema, migrations, config, and generated client for runtime migration
